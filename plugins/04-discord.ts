@@ -209,36 +209,39 @@ function createNotificationEmbed(type: string, data: any): EmbedBuilder {
     case 'call_start':
       return new EmbedBuilder()
         .setTitle(`通話開始`)
-        .setColor(0x00ffff) // 青色
-        .addFields(
-          { name: 'チャンネル', value: data.channelName, inline: true },
-          { name: '開始者', value: data.userName, inline: true },
-        )
-        .setTimestamp()
+        .setColor(0x00bfff) // 青色
         .setDescription(`${data.userName}`)
+        .addFields(
+          { name: '`チャンネル`', value: data.channelName, inline: true },
+          { name: '`始めた人`', value: data.userName, inline: true },
+          { name: '`開始時刻`', value: timeStr, inline: true }
+        )
         .setThumbnail(`https://cdn.discordapp.com/avatars/${data.userId}/${data.userAvatar}.png`)
+        // .setTimestamp()
 
     case 'member_join':
       return new EmbedBuilder()
         .setTitle(`${data.userName} が参戦`)
-        .setColor(0x39ff14) // 緑色
+        .setColor(0x5cb85c) // 緑色
         .addFields(
-          { name: 'チャンネル', value: data.channelName, inline: true },
-          { name: '参加者', value: data.userName, inline: true }
+          { name: '`チャンネル`', value: data.channelName, inline: true },
+          { name: '`参加した人`', value: data.userName, inline: true },
+          { name: '`参戦時間`', value: timeStr, inline: true }
         )
         .setThumbnail(`https://cdn.discordapp.com/avatars/${data.userId}/${data.userAvatar}.png`)
-        .setTimestamp();
+        // .setTimestamp();
 
     case 'call_end':
       return new EmbedBuilder()
         .setTitle('通話終了...')
-        .setColor(0xff006e) // 赤色
+        .setColor(0xd9534f) // 赤色
         .addFields(
-          { name: 'チャンネル', value: data.channelName, inline: true },
-          { name: '通話時間', value: data.duration, inline: true }
+          { name: '`チャンネル`', value: data.channelName, inline: true },
+          { name: '`終了時刻`', value: timeStr, inline: true },
+          { name: '`通話時間`', value: data.duration, inline: true }
         )
-        .setTimestamp()
         .setThumbnail(`https://cataas.com/cat?width=128&height=128&${Date.now()}`)
+        // .setTimestamp()
 
     default:
       return new EmbedBuilder()
