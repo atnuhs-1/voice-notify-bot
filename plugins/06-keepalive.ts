@@ -9,7 +9,7 @@ const simpleKeepAlivePlugin: FastifyPluginAsync = async (fastify) => {
 
   // 10分ごとにヘルスチェックを実行
   const startHealthCheckCron = () => {
-    cron.schedule("* * * * *", async () => {
+    cron.schedule("*/10 * * * *", async () => {
       try {
         const now = new Date().toLocaleString('ja-JP')
         fastify.log.info(`🔍 [${now}] ヘルスチェック実行中... (${HEALTH_CHECK_URL})`)
