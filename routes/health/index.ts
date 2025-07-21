@@ -1,8 +1,8 @@
 import { FastifyPluginAsync } from 'fastify';
 
-const healthRoutes: FastifyPluginAsync = async (fastify) => {
+const healthRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
   // シンプルなヘルスチェック
-  fastify.get('/health', async (request, reply) => {
+  fastify.get('/', async (request, reply) => {
     return { status: 'ok', timestamp: new Date().toISOString() };
   });
 
