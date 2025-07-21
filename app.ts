@@ -27,6 +27,13 @@ const app: FastifyPluginAsync<AppOptions> = async (
     options: opts
   })
 
+  // ルート一覧を表示
+  fastify.ready().then(() => {
+    console.log('\n📋 Registered routes:')
+    console.log(fastify.printRoutes())
+    console.log('==================\n')
+  })
+
   fastify.log.info('✅ Application initialized successfully')
 }
 
