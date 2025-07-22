@@ -1,6 +1,7 @@
 import { join } from 'path'
 import AutoLoad, { AutoloadPluginOptions } from '@fastify/autoload'
 import { FastifyPluginAsync, FastifyServerOptions } from 'fastify'
+import cors from '@fastify/cors';
 
 export interface AppOptions extends FastifyServerOptions, Partial<AutoloadPluginOptions> {
   // Discord Bot関連のオプションも追加可能
@@ -33,6 +34,11 @@ const app: FastifyPluginAsync<AppOptions> = async (
     console.log(fastify.printRoutes())
     console.log('==================\n')
   })
+
+  fastify.register(cors, {
+  // 特定のオリジンからのリクエストのみを許可
+  origin: ['http://localhost:5173', 'https://your-production-domain.com'],
+  });
 
   fastify.log.info('✅ Application initialized successfully')
 }
