@@ -37,7 +37,7 @@ const app: FastifyPluginAsync<AppOptions> = async (
 
   fastify.register(cors, {
   // 特定のオリジンからのリクエストのみを許可
-  origin: ['http://localhost:5173', 'https://your-production-domain.com'],
+  origin: ['http://localhost:5173', 'http://127.0.0.1','https://your-production-domain.com'],
   });
 
   fastify.log.info('✅ Application initialized successfully')
