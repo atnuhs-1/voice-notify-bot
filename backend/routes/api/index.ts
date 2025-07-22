@@ -89,9 +89,10 @@ const apiRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     }
   })
 
-  // サーバー一覧API
+  // サーバー一覧API（チャンネル情報を含む）
   fastify.get('/guilds', async function (request, reply) {
     const discordBot = fastify.discord
+    const { includeChannels } = request.query as { includeChannels?: string }
 
     if (!discordBot || !discordBot.isReady()) {
       return reply.code(503).send({
@@ -100,16 +101,45 @@ const apiRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
     }
 
     try {
-      const guilds = discordBot.guilds.cache.map(guild => ({
-        id: guild.id,
-        name: guild.name,
-        memberCount: guild.memberCount,
-        channels: guild.channels.cache.size,
-        voiceChannels: guild.channels.cache.filter(ch => ch.type === 2).size,
-        owner: guild.ownerId,
-        icon: guild.iconURL({ size: 64 }),
-        joinedAt: guild.joinedAt?.toISOString()
-      }))
+      const guilds = discordBot.guilds.cache.map(guild => {
+        const baseGuildInfo = {
+          id: guild.id,
+          name: guild.name,
+          memberCount: guild.memberCount,
+          channels: guild.channels.cache.size,
+          voiceChannels: guild.channels.cache.filter(ch => ch.type === 2).size,
+          owner: guild.ownerId,
+          icon: guild.iconURL({ size: 64 }),
+          joinedAt: guild.joinedAt?.toISOString()
+        }
+
+        // includeChannels=true の場合、チャンネル詳細情報も含める
+        if (includeChannels === 'true') {
+          const textChannels = guild.channels.cache
+            .filter(ch => ch.type === 0) // GUILD_TEXT
+            .map(channel => ({
+              id: channel.id,
+              name: channel.name,
+              type: 'GUILD_TEXT'
+            }))
+
+          const voiceChannels = guild.channels.cache
+            .filter(ch => ch.type === 2) // GUILD_VOICE
+            .map(channel => ({
+              id: channel.id,
+              name: channel.name,
+              type: 'GUILD_VOICE'
+            }))
+
+          return {
+            ...baseGuildInfo,
+            textChannels,
+            voiceChannels: voiceChannels
+          }
+        }
+
+        return baseGuildInfo
+      })
 
       return reply.send({
         guilds,
