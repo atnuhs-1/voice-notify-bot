@@ -54,11 +54,20 @@ const app: FastifyPluginAsync<AppOptions> = async (
     options: opts
   })
 
+  // CORS設定を環境変数から取得
+  const getCorsOrigins = (): string[] => {
+    const corsOrigins = process.env.CORS_ORIGINS;
+    if (corsOrigins) {
+      return corsOrigins.split(',').map(origin => origin.trim());
+    }
+    return ['']; 
+  };
+
   // CORS設定
   fastify.register(cors, {
-    // 特定のオリジンからのリクエストのみを許可
-    origin: ['http://localhost:5173', 'http://127.0.0.1','http://127.0.0.1:5173','https://your-production-domain.com'],
-  })
+    origin: getCorsOrigins(),
+    credentials: true, // 認証情報を含むリクエストを許可
+  });
 
   // ルート一覧を表示
   fastify.ready().then(() => {
