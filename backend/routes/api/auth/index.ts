@@ -129,7 +129,7 @@ const authRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
       // 7. フロントエンドにリダイレクト（トークンをクエリパラメータで渡す）
       const frontendUrl = process.env.NODE_ENV === 'production' 
-        ? process.env.FRONTEND_URL || 'https://your-production-domain.com'
+        ? process.env.FRONTEND_URL 
         : 'http://localhost:5173'
       
       return reply.redirect(`${frontendUrl}?token=${jwtToken}`)
