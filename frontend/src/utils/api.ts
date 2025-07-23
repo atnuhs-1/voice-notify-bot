@@ -7,8 +7,15 @@ const apiCall = async (endpoint: string, options?: RequestInit) => {
   
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options?.headers,
   };
+
+  // 既存のヘッダーがある場合は安全に追加
+  if (options?.headers) {
+    const existingHeaders = new Headers(options.headers);
+    existingHeaders.forEach((value, key) => {
+      headers[key] = value;
+    });
+  }
 
   // トークンがある場合は認証ヘッダーを追加
   if (token) {

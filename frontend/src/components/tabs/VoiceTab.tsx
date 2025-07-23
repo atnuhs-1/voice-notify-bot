@@ -43,7 +43,6 @@ interface LiveStatus {
 
 const VoiceTab: React.FC<TabProps> = ({ 
   selectedGuild, 
-  selectedGuildData, 
   showResult 
 }) => {
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
@@ -78,7 +77,8 @@ const VoiceTab: React.FC<TabProps> = ({
       const status = await fetchLiveStatus(selectedGuild);
       setLiveStatus(status);
     } catch (error) {
-      showResult(`ライブ状況の取得に失敗: ${error.message}`, 'error');
+      const errorMessage = error instanceof Error ? error.message : '不明なエラー';
+      showResult(`ライブ状況の取得に失敗: ${errorMessage}`, 'error');
     } finally {
       setLoading(false);
     }
