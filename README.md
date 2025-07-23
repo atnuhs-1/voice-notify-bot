@@ -1,23 +1,23 @@
-# Getting Started with [Fastify-CLI](https://www.npmjs.com/package/fastify-cli)
-This project was bootstrapped with Fastify-CLI.
+# Discord 通知 Bot
 
-## Available Scripts
+### 技術構成
+#### バックエンド
+- Fastify
+- Discord.js
+- Koyeb
 
-In the project directory, you can run:
+#### フロントエンド（Webダッシュボード）
+- TypeScript
+- React
+- Vite
+- Vercel?
 
-### `npm run dev`
+### 機能
+- ボイスチャンネル開始、参加、終了通知
 
-To start the app in dev mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
-
-### `npm start`
-
-For production mode
-
-### `npm run test`
-
-Run the test cases.
-
-## Learn More
-
-To learn Fastify, check out the [Fastify documentation](https://fastify.dev/docs/latest/).
+#### 実装予定
+- Discordサーバーごとの認証
+- 統計
+  - ボイスチャンネル滞在時間ランキングetc
+- 参加アンケート（定期実行 or 手動）
+- 合成音声
