@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import LoginScreen from './components/LoginScreen'
+import ErrorDisplay from './components/ErrorDisplay'
+import LoadingScreen from './components/LoadingScreen'
 import Header from './components/Header'
 import StatsCards from './components/StatsCards'
 import TabNavigation from './components/TabNavigation'
@@ -15,6 +17,7 @@ import './App.css'
 // 認証後のメインアプリケーション
 function AuthenticatedApp() {
   const [activeTab, setActiveTab] = useState('overview')
+  const { user } = useAuth()
   
   // Discord データを取得（認証統合済み）
   const {
@@ -31,15 +34,14 @@ function AuthenticatedApp() {
   // 選択中のサーバーデータ
   const selectedGuildData = guilds.find(g => g.id === selectedGuild)
 
-  // ローディング中
+  // データローディング中
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white text-lg">データを読み込み中...</p>
-        </div>
-      </div>
+      <LoadingScreen
+        message="データを読み込み中..."
+        submessage={user ? `ようこそ、${user.tag} さん` : undefined}
+        showProgress={true}
+      />
     )
   }
 
@@ -53,6 +55,14 @@ function AuthenticatedApp() {
           <p className="text-white/80 mb-6">
             このBotが参加しているサーバーで管理者権限を持っていません。
           </p>
+          <div className="bg-white/5 rounded-lg p-4 mb-6">
+            <h3 className="text-white font-semibold mb-2">必要な条件:</h3>
+            <ul className="text-white/70 text-sm text-left space-y-1">
+              <li>• Botが参加しているサーバー</li>
+              <li>• ユーザーも参加しているサーバー</li>  
+              <li>• ユーザーが管理者権限を持っているサーバー</li>
+            </ul>
+          </div>
           <button
             onClick={() => window.location.reload()}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
@@ -99,7 +109,7 @@ function AuthenticatedApp() {
           stats={stats}
           guilds={guilds}
           selectedGuild={selectedGuild}
-          setSelectedGuild={setSelectedGuild} 
+          setSelectedGuild={setSelectedGuild}
           selectedGuildData={selectedGuildData}
         />
 
@@ -127,6 +137,36 @@ function AuthenticatedApp() {
   )
 }
 
+// 認証状態による条件付きレンダリング
+function AppContent() {
+  const { isAuthenticated, isLoading, error, retryAuth, clearError, login } = useAuth()
+
+  // 認証状態確認中
+  if (isLoading) {
+    return (
+      <LoadingScreen
+        message="認証状態を確認中..."
+        submessage="しばらくお待ちください"
+      />
+    )
+  }
+
+  // エラーが発生している場合
+  if (error) {
+    return (
+      <ErrorDisplay
+        error={error}
+        onRetry={error.canRetry ? retryAuth : undefined}
+        onLogin={login}
+        onDismiss={clearError}
+      />
+    )
+  }
+
+  // 認証状態に応じてコンポーネントを切り替え（ルーティング不要）
+  return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />
+}
+
 // メインAppコンポーネント
 function App() {
   return (
@@ -134,26 +174,6 @@ function App() {
       <AppContent />
     </AuthProvider>
   )
-}
-
-// 認証状態による条件付きレンダリング
-function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth()
-
-  // 認証状態確認中
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-          <p className="text-white text-lg">認証状態を確認中...</p>
-        </div>
-      </div>
-    )
-  }
-
-  // 認証状態に応じてコンポーネントを切り替え（ルーティング不要）
-  return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />
 }
 
 export default App
