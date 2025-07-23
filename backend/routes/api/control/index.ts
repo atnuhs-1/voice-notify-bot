@@ -3,6 +3,24 @@ import { TextChannel, NewsChannel, ThreadChannel, VoiceChannel, ChannelType } fr
 
 const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
 
+  // サーバー管理者権限チェックのミドルウェア
+  const checkServerAdmin = async (request: any, reply: any, guildId: string) => {
+    const user = request.user!
+    
+    // ユーザーが管理権限を持つサーバーかチェック
+    const hasAdminAccess = user.guilds.some((guild: any) => guild.id === guildId)
+    
+    if (!hasAdminAccess) {
+      return reply.code(403).send({
+        success: false,
+        error: 'このサーバーに対する管理者権限がありません',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      })
+    }
+
+    return true
+  }
+
   // メッセージ送信可能なチャンネルかどうかをチェックする型ガード
   const isTextBasedChannel = (channel: any): channel is TextChannel | NewsChannel | ThreadChannel => {
     return channel && typeof channel.send === 'function';
@@ -13,8 +31,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
     return channel && channel.type === ChannelType.GuildVoice;
   };
 
-  // メッセージ送信API
-  fastify.post('/send-message', async function (request, reply) {
+  // メッセージ送信API（認証必須）
+  fastify.post('/send-message', { preHandler: [fastify.authenticate] }, async function (request, reply) {
     try {
       const { channelId, content, embedTitle, embedDescription, embedColor } = request.body as {
         channelId: string;
@@ -38,6 +56,18 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
           error: 'チャンネルが見つかりません' 
         });
       }
+
+      // サーバー管理者権限チェック
+      const guildId = (channel as any).guildId || (channel as any).guild?.id;
+      if (!guildId) {
+        return reply.code(400).send({
+          success: false,
+          error: 'サーバーチャンネルではありません'
+        });
+      }
+
+      const adminCheck = await checkServerAdmin(request, reply, guildId);
+      if (adminCheck !== true) return adminCheck;
 
       // テキストベースのチャンネルかチェック
       if (!isTextBasedChannel(channel)) {
@@ -66,6 +96,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
 
       const sentMessage = await channel.send(messageOptions);
 
+      fastify.log.info(`Message sent by ${request.user!.username}#${request.user!.discriminator} to #${channel.name}`);
+
       return { 
         success: true, 
         messageId: sentMessage.id,
@@ -80,8 +112,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
     }
   });
 
-  // チャンネル作成API
-  fastify.post('/create-channel', async function (request, reply) {
+  // チャンネル作成API（認証必須）
+  fastify.post('/create-channel', { preHandler: [fastify.authenticate] }, async function (request, reply) {
     try {
       const { guildId, name, type, topic, slowmode } = request.body as {
         guildId: string;
@@ -90,6 +122,10 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
         topic?: string;
         slowmode?: number;
       };
+
+      // サーバー管理者権限チェック
+      const adminCheck = await checkServerAdmin(request, reply, guildId);
+      if (adminCheck !== true) return adminCheck;
 
       if (!fastify.discord || !fastify.discord.isReady()) {
         return reply.code(503).send({ 
@@ -118,6 +154,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
 
       const createdChannel = await guild.channels.create(channelOptions);
 
+      fastify.log.info(`Channel created by ${request.user!.username}#${request.user!.discriminator}: ${createdChannel.name} in ${guild.name}`);
+
       return { 
         success: true, 
         channelId: createdChannel.id,
@@ -133,8 +171,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
     }
   });
 
-  // チャンネル削除API
-  fastify.delete('/delete-channel/:channelId', async function (request, reply) {
+  // チャンネル削除API（認証必須）
+  fastify.delete('/delete-channel/:channelId', { preHandler: [fastify.authenticate] }, async function (request, reply) {
     try {
       const { channelId } = request.params as { channelId: string };
 
@@ -153,7 +191,24 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
         });
       }
 
+      // サーバー管理者権限チェック
+      const guildId = (channel as any).guildId || (channel as any).guild?.id;
+      if (!guildId) {
+        return reply.code(400).send({
+          success: false,
+          error: 'サーバーチャンネルではありません'
+        });
+      }
+
+      const adminCheck = await checkServerAdmin(request, reply, guildId);
+      if (adminCheck !== true) return adminCheck;
+
+      const channelName = 'name' in channel ? channel.name : 'Unknown Channel';
+      const guildName = 'guild' in channel ? (channel as any).guild?.name : 'Unknown Guild';
+
       await channel.delete();
+
+      fastify.log.info(`Channel deleted by ${request.user!.username}#${request.user!.discriminator}: ${channelName} in ${guildName}`);
 
       return { 
         success: true, 
@@ -168,8 +223,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
     }
   });
 
-  // メンバー操作API
-  fastify.post('/member-action', async function (request, reply) {
+  // メンバー操作API（認証必須）
+  fastify.post('/member-action', { preHandler: [fastify.authenticate] }, async function (request, reply) {
     try {
       const { guildId, userId, action, value } = request.body as {
         guildId: string;
@@ -177,6 +232,10 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
         action: 'nickname' | 'move' | 'mute' | 'unmute' | 'kick';
         value?: string;
       };
+
+      // サーバー管理者権限チェック
+      const adminCheck = await checkServerAdmin(request, reply, guildId);
+      if (adminCheck !== true) return adminCheck;
 
       if (!fastify.discord || !fastify.discord.isReady()) {
         return reply.code(503).send({ 
@@ -249,6 +308,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
           });
       }
 
+      fastify.log.info(`Member action by ${request.user!.username}#${request.user!.discriminator}: ${action} on ${member.displayName} in ${guild.name}`);
+
       return { success: true, message };
     } catch (error) {
       fastify.log.error('メンバー操作エラー:', error);
@@ -259,8 +320,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
     }
   });
 
-  // 一括操作API
-  fastify.post('/bulk-action', async function (request, reply) {
+  // 一括操作API（認証必須）
+  fastify.post('/bulk-action', { preHandler: [fastify.authenticate] }, async function (request, reply) {
     try {
       const { guildId, action, targetChannelId, sourceChannelId } = request.body as {
         guildId: string;
@@ -268,6 +329,10 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
         targetChannelId?: string;
         sourceChannelId?: string;
       };
+
+      // サーバー管理者権限チェック
+      const adminCheck = await checkServerAdmin(request, reply, guildId);
+      if (adminCheck !== true) return adminCheck;
 
       if (!fastify.discord || !fastify.discord.isReady()) {
         return reply.code(503).send({ 
@@ -395,6 +460,8 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
           });
       }
 
+      fastify.log.info(`Bulk action by ${request.user!.username}#${request.user!.discriminator}: ${action} (${affectedCount} affected) in ${guild.name}`);
+
       return { success: true, message, affectedCount };
     } catch (error) {
       fastify.log.error('一括操作エラー:', error);
@@ -405,10 +472,14 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
     }
   });
 
-  // サーバー詳細情報API（リアルタイムボイス状態含む）
-  fastify.get('/live-status/:guildId', async function (request, reply) {
+  // サーバー詳細情報API（認証必須、リアルタイムボイス状態含む）
+  fastify.get('/live-status/:guildId', { preHandler: [fastify.authenticate] }, async function (request, reply) {
     try {
       const { guildId } = request.params as { guildId: string };
+
+      // サーバー管理者権限チェック
+      const adminCheck = await checkServerAdmin(request, reply, guildId);
+      if (adminCheck !== true) return adminCheck;
 
       if (!fastify.discord || !fastify.discord.isReady()) {
         return reply.code(503).send({
@@ -476,6 +547,10 @@ const controlRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> =
           totalVoiceChannels: voiceChannels.length,
           activeVoiceChannels: voiceChannels.filter(ch => ch.memberCount > 0).length,
           totalUsersInVoice: voiceChannels.reduce((acc, ch) => acc + ch.memberCount, 0)
+        },
+        user: {
+          id: request.user!.userId,
+          permissions: request.user!.guilds.find(g => g.id === guildId)?.permissions || '0'
         },
         timestamp: new Date().toISOString()
       };
