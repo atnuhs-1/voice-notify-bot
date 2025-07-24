@@ -102,6 +102,33 @@ export const deleteChannel = (channelId: string) =>
 export const fetchLiveStatus = (guildId: string) => 
   apiCall(`/api/control/live-status/${guildId}`);
 
+// === 新規追加：サーバー概要データ取得 ===
+
+// 通知設定取得
+export const fetchNotifications = (guildId?: string) => {
+  const params = guildId ? `?guildId=${guildId}` : '';
+  return apiCall(`/api/notifications${params}`);
+};
+
+// セッション履歴取得
+export const fetchSessions = (options: {
+  guildId?: string;
+  limit?: number;
+  active?: boolean;
+} = {}) => {
+  const params = new URLSearchParams();
+  if (options.guildId) params.append('guildId', options.guildId);
+  if (options.limit) params.append('limit', options.limit.toString());
+  if (options.active !== undefined) params.append('active', options.active.toString());
+  
+  const queryString = params.toString();
+  return apiCall(`/api/sessions${queryString ? `?${queryString}` : ''}`);
+};
+
+// サーバーのボイスチャンネル詳細取得
+export const fetchGuildVoiceDetails = (guildId: string) => 
+  apiCall(`/api/guild/${guildId}/voice`);
+
 // === 認証関連API（新規追加） ===
 
 // 現在のユーザー情報を取得
