@@ -1,26 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { fetchNotifications, fetchSessions, fetchLiveStatus } from '../../utils/api';
-import { calculateDuration, formatDate } from '../../utils/datetime';
-import type { 
-  Guild, 
-  NotificationSetting, 
-  VoiceSession, 
-  LiveStatus 
-} from '../../types/discord';
+import React, { useState, useEffect } from "react";
+import {
+  fetchNotifications,
+  fetchSessions,
+  fetchLiveStatus,
+} from "../../utils/api";
+import { calculateDuration, formatDate } from "../../utils/datetime";
+import type {
+  Guild,
+  NotificationSetting,
+  VoiceSession,
+  LiveStatus,
+} from "../../types/discord";
 
 // このコンポーネント専用のProps型
 interface OverviewTabProps {
   guilds: Guild[];
   selectedGuild: string;
   selectedGuildData?: Guild;
-  showResult: (message: string, type: 'success' | 'error') => void;
+  showResult: (message: string, type: "success" | "error") => void;
   loadData: () => void;
 }
 
 const OverviewTab: React.FC<OverviewTabProps> = ({
   selectedGuild,
   selectedGuildData,
-  showResult
+  showResult,
 }) => {
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState<NotificationSetting[]>([]);
@@ -42,23 +46,27 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
 
     try {
       setLoading(true);
-      
+
       // 並行してデータを取得
-      const [notificationsData, recentSessionsData, activeSessionsData, liveStatusData] = await Promise.all([
+      const [
+        notificationsData,
+        recentSessionsData,
+        activeSessionsData,
+        liveStatusData,
+      ] = await Promise.all([
         fetchNotifications(selectedGuild),
         fetchSessions({ guildId: selectedGuild, limit: 30 }),
         fetchSessions({ guildId: selectedGuild, active: true }),
-        fetchLiveStatus(selectedGuild)
+        fetchLiveStatus(selectedGuild),
       ]);
 
       setNotifications(notificationsData.notifications || []);
       setRecentSessions(recentSessionsData.sessions || []);
       setActiveSessions(activeSessionsData.sessions || []);
       setLiveStatus(liveStatusData);
-
     } catch (error) {
-      console.error('概要データの取得に失敗:', error);
-      showResult('概要データの取得に失敗しました', 'error');
+      console.error("概要データの取得に失敗:", error);
+      showResult("概要データの取得に失敗しました", "error");
     } finally {
       setLoading(false);
     }
@@ -100,9 +108,11 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
             </div>
           )}
           <div>
-            <h2 className="text-2xl font-bold text-white">{selectedGuildData.name}</h2>
+            <h2 className="text-2xl font-bold text-white">
+              {selectedGuildData.name}
+            </h2>
             <p className="text-white/70">
-              👥 {selectedGuildData.memberCount}人 
+              👥 {selectedGuildData.memberCount}人
               {liveStatus && (
                 <span className="ml-2">
                   • 🟢 {liveStatus.guild.onlineCount}人オンライン
@@ -114,22 +124,102 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-white/10 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-white">{selectedGuildData.textChannels?.length || 0}</div>
+            <div className="text-2xl font-bold text-white">
+              {selectedGuildData.textChannels?.length || 0}
+            </div>
             <div className="text-white/70 text-sm">テキストチャンネル</div>
           </div>
           <div className="bg-white/10 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-white">{selectedGuildData.voiceChannels?.length || 0}</div>
+            <div className="text-2xl font-bold text-white">
+              {selectedGuildData.voiceChannels?.length || 0}
+            </div>
             <div className="text-white/70 text-sm">ボイスチャンネル</div>
           </div>
           <div className="bg-white/10 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-white">{liveStatus?.stats.activeVoiceChannels || 0}</div>
+            <div className="text-2xl font-bold text-white">
+              {liveStatus?.stats.activeVoiceChannels || 0}
+            </div>
             <div className="text-white/70 text-sm">アクティブ通話</div>
           </div>
           <div className="bg-white/10 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-white">{liveStatus?.stats.totalUsersInVoice || 0}</div>
+            <div className="text-2xl font-bold text-white">
+              {liveStatus?.stats.totalUsersInVoice || 0}
+            </div>
             <div className="text-white/70 text-sm">通話参加中</div>
           </div>
         </div>
+      </div>
+
+      {/* 最近の通話履歴 */}
+      <div className="bg-white/10 rounded-xl p-6 border border-white/20">
+        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+          📊 最近の通話履歴
+        </h3>
+
+        {recentSessions.length > 0 ? (
+          <div>
+            {/* 固定ヘッダー */}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/20">
+                    <th className="text-left text-white/70 py-2">チャンネル</th>
+                    <th className="text-left text-white/70 py-2">開始時刻</th>
+                    <th className="text-left text-white/70 py-2">終了時刻</th>
+                    <th className="text-left text-white/70 py-2">通話時間</th>
+                    <th className="text-left text-white/70 py-2">状態</th>
+                  </tr>
+                </thead>
+              </table>
+            </div>
+
+            {/* スクロール可能ボディ */}
+            <div className="max-h-80 overflow-y-auto thin-scrollbar">
+              <table className="w-full">
+                <tbody>
+                  {recentSessions.map((session) => {
+                    const channel = selectedGuildData.voiceChannels?.find(
+                      (ch) => ch.id === session.channelId
+                    );
+
+                    return (
+                      <tr key={session.id} className="border-b border-white/10">
+                        <td className="py-3 text-white">
+                          {channel?.name || "Unknown Channel"}
+                        </td>
+                        <td className="py-3 text-white/70 text-sm">
+                          {formatDate(session.startTime)}
+                        </td>
+                        <td className="py-3 text-white/70 text-sm">
+                          {session.endTime ? formatDate(session.endTime) : "-"}
+                        </td>
+                        <td className="py-3 text-white/70 text-sm">
+                          {calculateDuration(
+                            session.startTime,
+                            session.endTime
+                          )}
+                        </td>
+                        <td className="py-3">
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs ${
+                              session.isActive
+                                ? "bg-green-500/20 text-green-400"
+                                : "bg-gray-500/20 text-gray-400"
+                            }`}
+                          >
+                            {session.isActive ? "進行中" : "終了"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <p className="text-white/50">通話履歴がありません</p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -138,25 +228,31 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             🔊 アクティブな通話
           </h3>
-          
-          {liveStatus && liveStatus.voiceChannels.filter(ch => ch.isActive).length > 0 ? (
+
+          {liveStatus &&
+          liveStatus.voiceChannels.filter((ch) => ch.isActive).length > 0 ? (
             <div className="space-y-3">
               {liveStatus.voiceChannels
-                .filter(ch => ch.isActive)
-                .map(channel => (
+                .filter((ch) => ch.isActive)
+                .map((channel) => (
                   <div key={channel.id} className="bg-white/5 rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-semibold text-white">{channel.name}</h4>
+                      <h4 className="font-semibold text-white">
+                        {channel.name}
+                      </h4>
                       <span className="text-green-400 text-sm">
                         {channel.memberCount}人参加中
                       </span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {channel.members.map(member => (
-                        <div key={member.id} className="flex items-center gap-2 bg-white/10 rounded-full px-3 py-1">
+                      {channel.members.map((member) => (
+                        <div
+                          key={member.id}
+                          className="flex items-center gap-2 bg-white/10 rounded-full px-3 py-1"
+                        >
                           {member.avatar ? (
-                            <img 
-                              src={member.avatar} 
+                            <img
+                              src={member.avatar}
                               alt={member.displayName}
                               className="w-6 h-6 rounded-full"
                             />
@@ -167,7 +263,9 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
                               </span>
                             </div>
                           )}
-                          <span className="text-white/80 text-sm">{member.displayName}</span>
+                          <span className="text-white/80 text-sm">
+                            {member.displayName}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -184,25 +282,40 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             🔔 通知設定
           </h3>
-          
+
           {notifications.length > 0 ? (
             <div className="space-y-2">
-              {notifications.slice(0, 5).map(notification => {
-                const voiceChannel = selectedGuildData.voiceChannels?.find(ch => ch.id === notification.voiceChannelId);
-                const textChannel = selectedGuildData.textChannels?.find(ch => ch.id === notification.textChannelId);
-                
+              {notifications.slice(0, 5).map((notification) => {
+                const voiceChannel = selectedGuildData.voiceChannels?.find(
+                  (ch) => ch.id === notification.voiceChannelId
+                );
+                const textChannel = selectedGuildData.textChannels?.find(
+                  (ch) => ch.id === notification.textChannelId
+                );
+
                 return (
-                  <div key={notification.id} className="bg-white/5 rounded-lg p-3">
+                  <div
+                    key={notification.id}
+                    className="bg-white/5 rounded-lg p-3"
+                  >
                     <div className="text-white/80 text-sm">
-                      🎤 <span className="font-medium">{voiceChannel?.name || 'Unknown'}</span>
+                      🎤{" "}
+                      <span className="font-medium">
+                        {voiceChannel?.name || "Unknown"}
+                      </span>
                       <br />
-                      💬 <span className="text-white/60">{textChannel?.name || 'Unknown'}</span>
+                      💬{" "}
+                      <span className="text-white/60">
+                        {textChannel?.name || "Unknown"}
+                      </span>
                     </div>
                   </div>
                 );
               })}
               {notifications.length > 5 && (
-                <p className="text-white/50 text-sm">他 {notifications.length - 5}件の設定</p>
+                <p className="text-white/50 text-sm">
+                  他 {notifications.length - 5}件の設定
+                </p>
               )}
             </div>
           ) : (
@@ -211,75 +324,22 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
         </div>
       </div>
 
-      {/* 最近の通話履歴 */}
-      <div className="bg-white/10 rounded-xl p-6 border border-white/20">
-        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-          📊 最近の通話履歴
-        </h3>
-        
-        {recentSessions.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/20">
-                  <th className="text-left text-white/70 py-2">チャンネル</th>
-                  <th className="text-left text-white/70 py-2">開始時刻</th>
-                  <th className="text-left text-white/70 py-2">終了時刻</th>
-                  <th className="text-left text-white/70 py-2">通話時間</th>
-                  <th className="text-left text-white/70 py-2">状態</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentSessions.map(session => {
-                  const channel = selectedGuildData.voiceChannels?.find(ch => ch.id === session.channelId);
-                  
-                  return (
-                    <tr key={session.id} className="border-b border-white/10">
-                      <td className="py-3 text-white">
-                        {channel?.name || 'Unknown Channel'}
-                      </td>
-                      <td className="py-3 text-white/70 text-sm">
-                        {formatDate(session.startTime)}
-                      </td>
-                      <td className="py-3 text-white/70 text-sm">
-                        {session.endTime ? formatDate(session.endTime) : '-'}
-                      </td>
-                      <td className="py-3 text-white/70 text-sm">
-                        {calculateDuration(session.startTime, session.endTime)}
-                      </td>
-                      <td className="py-3">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          session.isActive 
-                            ? 'bg-green-500/20 text-green-400' 
-                            : 'bg-gray-500/20 text-gray-400'
-                        }`}>
-                          {session.isActive ? '進行中' : '終了'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-white/50">通話履歴がありません</p>
-        )}
-      </div>
-
       {/* オンラインメンバー */}
       {liveStatus && liveStatus.onlineMembers.length > 0 && (
         <div className="bg-white/10 rounded-xl p-6 border border-white/20">
           <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             🟢 オンラインメンバー
           </h3>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {liveStatus.onlineMembers.slice(0, 12).map(member => (
-              <div key={member.id} className="flex items-center gap-3 bg-white/5 rounded-lg p-3">
+            {liveStatus.onlineMembers.slice(0, 12).map((member) => (
+              <div
+                key={member.id}
+                className="flex items-center gap-3 bg-white/5 rounded-lg p-3"
+              >
                 {member.avatar ? (
-                  <img 
-                    src={member.avatar} 
+                  <img
+                    src={member.avatar}
                     alt={member.displayName}
                     className="w-10 h-10 rounded-full"
                   />
@@ -291,16 +351,24 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="text-white font-medium truncate">{member.displayName}</div>
+                  <div className="text-white font-medium truncate">
+                    {member.displayName}
+                  </div>
                   <div className="text-white/50 text-xs">
                     {member.activity || member.status}
                   </div>
                 </div>
-                <div className={`w-3 h-3 rounded-full ${
-                  member.status === 'online' ? 'bg-green-500' :
-                  member.status === 'idle' ? 'bg-yellow-500' :
-                  member.status === 'dnd' ? 'bg-red-500' : 'bg-gray-500'
-                }`}></div>
+                <div
+                  className={`w-3 h-3 rounded-full ${
+                    member.status === "online"
+                      ? "bg-green-500"
+                      : member.status === "idle"
+                      ? "bg-yellow-500"
+                      : member.status === "dnd"
+                      ? "bg-red-500"
+                      : "bg-gray-500"
+                  }`}
+                ></div>
               </div>
             ))}
             {liveStatus.onlineMembers.length > 12 && (
@@ -321,7 +389,7 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
           disabled={loading}
           className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 text-white px-6 py-2 rounded-lg transition-colors"
         >
-          {loading ? '更新中...' : '🔄 最新情報に更新'}
+          {loading ? "更新中..." : "🔄 最新情報に更新"}
         </button>
       </div>
     </div>
