@@ -97,6 +97,8 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
     },
 
     async setNotifications(guildId: string, textChannelId: string, voiceChannelIds: string[]) {
+      const now = new Date().toISOString(); // ISO形式で統一
+      
       // トランザクション：既存設定を削除して新規作成
       await client.batch([
         // 既存設定を削除
@@ -104,10 +106,10 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
           sql: 'DELETE FROM notifications WHERE guildId = ? AND textChannelId = ?',
           args: [guildId, textChannelId],
         },
-        // 新規設定を作成
+        // 新規設定を作成（createdAtも明示的に設定）
         ...voiceChannelIds.map(voiceChannelId => ({
-          sql: 'INSERT INTO notifications (guildId, voiceChannelId, textChannelId) VALUES (?, ?, ?)',
-          args: [guildId, voiceChannelId, textChannelId],
+          sql: 'INSERT INTO notifications (guildId, voiceChannelId, textChannelId, createdAt) VALUES (?, ?, ?, ?)',
+          args: [guildId, voiceChannelId, textChannelId, now],
         })),
       ]);
     },
@@ -119,25 +121,30 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
       });
     },
 
-    // VoiceSessions テーブル操作
+    // 修正: JavaScript でISO形式の時刻を生成
     async startVoiceSession(guildId: string, channelId: string) {
+      const now = new Date().toISOString(); // "2025-07-23T13:35:01.000Z"
+      
       const result = await client.execute({
-        sql: 'INSERT INTO voice_sessions (guildId, channelId, startTime, isActive) VALUES (?, ?, datetime("now"), true)',
-        args: [guildId, channelId],
+        sql: 'INSERT INTO voice_sessions (guildId, channelId, startTime, isActive) VALUES (?, ?, ?, true)',
+        args: [guildId, channelId, now], // ISO形式で保存
       });
 
       return Number(result.lastInsertRowid);
     },
 
+    // 修正: endTime もISO形式で保存
     async endVoiceSession(guildId: string, channelId: string) {
       // アクティブなセッションを取得
       const activeSession = await this.getActiveSession(guildId, channelId);
       if (!activeSession) return null;
 
+      const now = new Date().toISOString(); // "2025-07-23T13:35:01.000Z"
+
       // セッションを終了
       await client.execute({
-        sql: 'UPDATE voice_sessions SET endTime = datetime("now"), isActive = false WHERE id = ?',
-        args: [activeSession.id],
+        sql: 'UPDATE voice_sessions SET endTime = ?, isActive = false WHERE id = ?',
+        args: [now, activeSession.id], // ISO形式で保存
       });
 
       // 更新されたセッションを返す

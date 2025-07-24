@@ -80,3 +80,77 @@ export interface TabProps {
   showResult: (message: string, type: 'success' | 'error') => void;
   loadData: () => void;
 }
+
+// 新しく追加する共通型定義
+
+/**
+ * 通知設定の型定義
+ */
+export interface NotificationSetting {
+  id: number;
+  guildId: string;
+  voiceChannelId: string;
+  textChannelId: string;
+  createdAt: string;
+}
+
+/**
+ * ボイスセッションの型定義
+ */
+export interface VoiceSession {
+  id: number;
+  guildId: string;
+  channelId: string;
+  startTime: string;
+  endTime: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+/**
+ * ボイスチャンネル詳細情報の型定義
+ */
+export interface VoiceChannelDetail {
+  id: string;
+  name: string;
+  userLimit: number;
+  bitrate: number;
+  members: Array<{
+    id: string;
+    displayName: string;
+    avatar: string;
+  }>;
+  memberCount: number;
+  isActive: boolean;
+}
+
+/**
+ * オンラインメンバーの型定義
+ */
+export interface OnlineMember {
+  id: string;
+  username: string;
+  displayName: string;
+  avatar: string;
+  status: string;
+  activity: string | null;
+}
+
+/**
+ * リアルタイム状況の型定義
+ */
+export interface LiveStatus {
+  guild: {
+    id: string;
+    name: string;
+    memberCount: number;
+    onlineCount: number;
+  };
+  voiceChannels: VoiceChannelDetail[];
+  onlineMembers: OnlineMember[];
+  stats: {
+    totalVoiceChannels: number;
+    activeVoiceChannels: number;
+    totalUsersInVoice: number;
+  };
+}
