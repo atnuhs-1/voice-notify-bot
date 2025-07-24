@@ -28,6 +28,8 @@ const OverviewTab: React.FC<OverviewTabProps> = ({
   const [activeSessions, setActiveSessions] = useState<VoiceSession[]>([]);
   const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null);
 
+  console.log(activeSessions);
+
   // データ取得
   useEffect(() => {
     if (selectedGuild) {
