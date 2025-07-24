@@ -1,25 +1,62 @@
 import { useState } from 'react'
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import LoginScreen from './components/LoginScreen'
 import ErrorDisplay from './components/ErrorDisplay'
 import LoadingScreen from './components/LoadingScreen'
 import Header from './components/Header'
-import StatsCards from './components/StatsCards'
 import TabNavigation from './components/TabNavigation'
 import OverviewTab from './components/tabs/OverviewTabs'
 import MessageTab from './components/tabs/MessageTab'
 import ChannelTab from './components/tabs/ChannelTab'
 import MembersTab from './components/tabs/MembersTab'
 import VoiceTab from './components/tabs/VoiceTab'
+import NeonDashboard from './components/NeonDashboard'
 import { useDiscordData } from './hooks/useDiscordData'
 import './App.css'
 
-// 認証後のメインアプリケーション
-function AuthenticatedApp() {
+// デザイン切り替えボタンコンポーネント
+function ThemeToggle() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isNeonMode = location.pathname === '/neon'
+
+  const toggleTheme = () => {
+    if (isNeonMode) {
+      navigate('/')
+    } else {
+      navigate('/neon')
+    }
+  }
+
+  return (
+    <button
+      onClick={toggleTheme}
+      className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg font-medium transition-all duration-300 theme-toggle-btn ${
+        isNeonMode
+          ? 'bg-cyan-500 text-black border border-cyan-400 shadow-[0_0_20px_rgba(0,255,255,0.5)] hover:shadow-[0_0_30px_rgba(0,255,255,0.8)]'
+          : 'bg-purple-600 text-white border border-purple-500 shadow-lg hover:bg-purple-700'
+      }`}
+      title={isNeonMode ? 'ノーマルモードに切り替え' : 'ネオンモードに切り替え'}
+    >
+      {isNeonMode ? (
+        <>
+          ☀️ <span className="ml-2">NORMAL</span>
+        </>
+      ) : (
+        <>
+          🌙 <span className="ml-2">NEON</span>
+        </>
+      )}
+    </button>
+  )
+}
+
+// 通常のダッシュボード（現在のデザイン）
+function NormalDashboard() {
   const [activeTab, setActiveTab] = useState('overview')
   const { user } = useAuth()
   
-  // Discord データを取得（認証統合済み）
   const {
     guilds,
     selectedGuild,
@@ -80,7 +117,9 @@ function AuthenticatedApp() {
     selectedGuild,
     selectedGuildData,
     showResult,
-    loadData
+    loadData,
+    stats,
+    setSelectedGuild
   }
 
   // アクティブタブのレンダリング
@@ -113,9 +152,6 @@ function AuthenticatedApp() {
           selectedGuildData={selectedGuildData}
         />
 
-        {/* 統計カード */}
-        <StatsCards stats={stats} />
-
         {/* タブナビゲーション */}
         <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -134,6 +170,24 @@ function AuthenticatedApp() {
         )}
       </div>
     </div>
+  )
+}
+
+// ネオンダッシュボードのラッパー（既存のNeonDashboardコンポーネントを使用）
+function NeonDashboardWrapper() {
+  return <NeonDashboard />
+}
+
+// 認証済みユーザー向けのルーティング
+function AuthenticatedApp() {
+  return (
+    <Router>
+      <ThemeToggle />
+      <Routes>
+        <Route path="/" element={<NormalDashboard />} />
+        <Route path="/neon" element={<NeonDashboardWrapper />} />
+      </Routes>
+    </Router>
   )
 }
 
@@ -163,7 +217,7 @@ function AppContent() {
     )
   }
 
-  // 認証状態に応じてコンポーネントを切り替え（ルーティング不要）
+  // 認証状態に応じてコンポーネントを切り替え
   return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />
 }
 
