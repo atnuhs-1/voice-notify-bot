@@ -1,4 +1,16 @@
 @import "tailwindcss";
+
+@theme {
+    --color-bg-primary: #f5f7fa;
+  --color-discord-blurple: #5865F2;
+  --color-discord-green: #57F287;
+  --color-discord-yellow: #FEE75C;
+  --color-discord-fuchsia: #EB459E;
+  --color-discord-red: #ED4245;
+  --color-discord-white: #FFFFFF;
+  --color-discord-black: #000000;
+}
+
 /* カスタムスクロールバークラス */
 
 /* 基本的なスクロールバー */
