@@ -5,15 +5,11 @@ import LoginScreen from './components/LoginScreen'
 import ErrorDisplay from './components/ErrorDisplay'
 import LoadingScreen from './components/LoadingScreen'
 import Header from './components/Header'
-import TabNavigation from './components/TabNavigation'
-import OverviewTab from './components/tabs/OverviewTabs'
-import MessageTab from './components/tabs/MessageTab'
-import ChannelTab from './components/tabs/ChannelTab'
-import MembersTab from './components/tabs/MembersTab'
-import VoiceTab from './components/tabs/VoiceTab'
+import TabNavigation from './components/TabNavigation'  
 import NeonDashboard from './components/NeonDashboard'
 import { useDiscordData } from './hooks/useDiscordData'
 import './App.css'
+import TabContainer from './components/TabContainer'
 
 // デザイン切り替えボタンコンポーネント
 function ThemeToggle() {
@@ -122,27 +118,9 @@ function NormalDashboard() {
     setSelectedGuild
   }
 
-  // アクティブタブのレンダリング
-  const renderActiveTab = () => {
-    switch (activeTab) {
-      case 'overview':
-        return <OverviewTab {...tabProps} />
-      case 'messages':
-        return <MessageTab {...tabProps} />
-      case 'channels':
-        return <ChannelTab {...tabProps} />
-      case 'members':
-        return <MembersTab {...tabProps} />
-      case 'voice':
-        return <VoiceTab {...tabProps} />
-      default:
-        return <OverviewTab {...tabProps} />
-    }
-  }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
-      <div className="container mx-auto px-4 py-8">
+    <div className="min-h-screen bg-bg-primary text-gray-800 leading-relaxed">
+      <div className="max-w-7xl mx-auto p-4">
         {/* ヘッダー */}
         <Header
           stats={stats}
@@ -155,10 +133,9 @@ function NormalDashboard() {
         {/* タブナビゲーション */}
         <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
-        {/* アクティブタブのコンテンツ */}
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20">
-          {renderActiveTab()}
-        </div>
+        
+          <TabContainer activeTab={activeTab} {...tabProps} />
+ 
 
         {/* 結果メッセージ */}
         {result && (
