@@ -46,11 +46,17 @@
 - サーバー管理者権限チェック
 - 基本的なWeb管理画面
 - Discord Bot制御API（メッセージ送信、チャンネル操作など）
+- **統一APIレスポンス形式**（`{data, meta, error?}`構造）
+- **3段階権限システム**（VIEW/MANAGE/EXECUTE）
+- **基本統計データベーステーブル**（user_voice_activities, period_user_stats等）
+- **期間別統計計算の基盤**（週間・月間・年間統計）
+- **通知スケジュール管理テーブル**（notification_schedules等）
+- **構造化エラーハンドリング**（統一エラーコード・メッセージ）
 
 ### 🔄 拡張予定機能
-- 統計・ランキング機能
-- カスタム通知システム
-- タイムライン表示
+- 統計・ランキングAPI実装
+- 実際の通知システムロジック
+- タイムライン表示API
 - PWAプッシュ通知
 
 ## API設計
@@ -664,17 +670,18 @@ Response: APIResponse<{
 }>
 ```
 
-#### Discord イベントハンドラー拡張
+#### Discord イベントハンドラー拡張（実装済み）
 ```typescript
-// 現在の handleVoiceStateUpdate を拡張
+// 実装済み: handleVoiceStateUpdate を拡張
 async function handleVoiceStateUpdate(oldState, newState) {
   // 既存のセッション管理ロジック
   
-  // 新規追加：個人の入退室記録
+  // 実装済み：個人の入退室記録
   if (ユーザー入室) {
-    await createUserActivity({
+    await dbHelpers.createUserActivity({
       guildId,
       userId,
+      username,
       channelId,
       sessionId,
       isSessionStarter,
@@ -683,10 +690,29 @@ async function handleVoiceStateUpdate(oldState, newState) {
   }
   
   if (ユーザー退室) {
-    await endUserActivity(guildId, userId, channelId);
-    await updatePeriodStatistics(guildId, userId, activity);
+    const userActivity = await dbHelpers.endUserActivity(guildId, userId, channelId);
+    if (userActivity && userActivity.duration !== null) {
+      const periods = getCurrentPeriodKeys(new Date(userActivity.joinTime));
+      await dbHelpers.updatePeriodStats(guildId, userId, userName, 'week', periods.currentWeek, userActivity);
+      await dbHelpers.updatePeriodStats(guildId, userId, userName, 'month', periods.currentMonth, userActivity);
+      await dbHelpers.updatePeriodStats(guildId, userId, userName, 'year', periods.currentYear, userActivity);
+    }
   }
 }
+```
+
+#### 実装済みプラグイン構成
+```typescript
+// app.ts でのプラグイン読み込み順序（実装済み）
+await fastify.register(supportPlugin)     // 基本ユーティリティ
+await fastify.register(envPlugin)         // 環境変数管理
+await fastify.register(databasePlugin)    // Turso接続 + DatabaseHelpers
+await fastify.register(discordPlugin)     // Discord.js + イベントハンドラー
+await fastify.register(authPlugin)        // JWT認証システム
+await fastify.register(responsePlugin)    // 統一APIレスポンス ← NEW
+await fastify.register(permissionPlugin)  // 権限チェックシステム ← NEW
+await fastify.register(commandsPlugin)    // Discord スラッシュコマンド
+await fastify.register(keepalivePlugin)   // ヘルスチェック
 ```
 
 ## 環境変数

@@ -47,7 +47,7 @@ CREATE INDEX idx_voice_sessions_active
 ON voice_sessions(guildId, channelId, isActive);
 ```
 
-### 3. 通知スケジュール関連テーブル（新規）
+### 3. 通知スケジュール関連テーブル（実装済み）
 
 #### notification_schedules テーブル（通知設定管理）
 ```sql
@@ -198,7 +198,7 @@ CREATE INDEX idx_push_subscriptions_active
 ON push_subscriptions(isActive, dailyNotificationEnabled);
 ```
 
-### 5. 統計テーブル（統計ダッシュボード用）
+### 5. 統計テーブル（統計ダッシュボード用・実装済み）
 
 #### user_voice_activities テーブル（個人の入退室ログ）
 ```sql
@@ -515,19 +515,19 @@ async function getNotificationSchedule(guildId, scheduleType = 'daily') {
 
 ### 1. リアルタイム記録（Discord イベント時）
 
-#### ユーザー入室時
+#### ユーザー入室時（実装済み）
 ```javascript
 async function onUserJoinVoice(guildId, userId, channelId) {
   // 1. セッション管理（既存ロジック）
-  let sessionId = await getCurrentActiveSession(guildId, channelId);
+  let sessionId = await dbHelpers.getActiveSession(guildId, channelId);
   const isSessionStarter = !sessionId;
   
   if (!sessionId) {
-    sessionId = await createVoiceSession(guildId, channelId);
+    sessionId = await dbHelpers.startVoiceSession(guildId, channelId);
   }
   
-  // 2. 個人記録開始（新規）
-  const activityId = await createUserActivity({
+  // 2. 個人記録開始（実装済み）
+  const activityId = await dbHelpers.createUserActivity({
     guildId,
     userId,
     username: getUserDisplayName(userId), // Discord APIから取得
@@ -538,27 +538,30 @@ async function onUserJoinVoice(guildId, userId, channelId) {
     isActive: true
   });
   
-  console.log(`User ${userId} joined, activity: ${activityId}, starter: ${isSessionStarter}`);
+  fastify.log.info(`User ${userId} joined, activity: ${activityId}, starter: ${isSessionStarter}`);
 }
 ```
 
-#### ユーザー退室時
+#### ユーザー退室時（実装済み）
 ```javascript
 async function onUserLeaveVoice(guildId, userId, channelId) {
-  // 1. 個人記録終了（新規）
-  const activity = await endUserActivity(guildId, userId, channelId);
-  if (!activity) return;
+  // 1. 個人記録終了（実装済み）
+  const userActivity = await dbHelpers.endUserActivity(guildId, userId, channelId);
+  if (!userActivity || userActivity.duration === null) return;
   
-  // 2. 期間別統計を即座に更新
-  await updatePeriodStats(guildId, userId, activity);
+  // 2. 期間別統計を即座に更新（実装済み）
+  const periods = getCurrentPeriodKeys(new Date(userActivity.joinTime));
+  await dbHelpers.updatePeriodStats(guildId, userId, userName, 'week', periods.currentWeek, userActivity);
+  await dbHelpers.updatePeriodStats(guildId, userId, userName, 'month', periods.currentMonth, userActivity);
+  await dbHelpers.updatePeriodStats(guildId, userId, userName, 'year', periods.currentYear, userActivity);
   
   // 3. セッション管理（既存ロジック）
   const remainingUsers = await getActiveUsersInChannel(guildId, channelId);
   if (remainingUsers.length === 0) {
-    await endVoiceSession(guildId, channelId);
+    await dbHelpers.endVoiceSession(guildId, channelId);
   }
   
-  console.log(`User ${userId} left, duration: ${activity.duration}s`);
+  fastify.log.info(`User ${userId} left, duration: ${userActivity.duration}s`);
 }
 
 async function endUserActivity(guildId, userId, channelId) {
@@ -590,19 +593,30 @@ async function endUserActivity(guildId, userId, channelId) {
 }
 ```
 
-### 2. 期間別統計の更新
+### 2. 期間別統計の更新（実装済み）
 
-#### リアルタイム統計更新
+#### リアルタイム統計更新（実装済み）
 ```javascript
-async function updatePeriodStats(guildId, userId, activity) {
-  const periods = getCurrentPeriodKeys(activity.joinTime);
+// 実装済みの統計更新処理
+async function updatePeriodStatsForUser(guildId, userId, userName, userActivity) {
+  const periods = getCurrentPeriodKeys(new Date(userActivity.joinTime));
   
-  // 現在の週・月・年の統計を更新
-  await Promise.all([
-    updateSinglePeriodStats(guildId, userId, 'week', periods.currentWeek, activity),
-    updateSinglePeriodStats(guildId, userId, 'month', periods.currentMonth, activity),
-    updateSinglePeriodStats(guildId, userId, 'year', periods.currentYear, activity)
-  ]);
+  // 実装済み：週・月・年の統計を個別に更新
+  await dbHelpers.updatePeriodStats(guildId, userId, userName, 'week', periods.currentWeek, userActivity);
+  await dbHelpers.updatePeriodStats(guildId, userId, userName, 'month', periods.currentMonth, userActivity);
+  await dbHelpers.updatePeriodStats(guildId, userId, userName, 'year', periods.currentYear, userActivity);
+}
+
+// 実装済み：DatabaseHelpers インターフェース
+interface DatabaseHelpers {
+  updatePeriodStats(
+    guildId: string, 
+    userId: string, 
+    username: string, 
+    periodType: PeriodType, 
+    periodKey: string, 
+    activity: UserVoiceActivity
+  ): Promise<void>;
 }
 
 async function updateSinglePeriodStats(guildId, userId, periodType, periodKey, activity) {
@@ -815,31 +829,39 @@ push_subscriptions: 最大100ユーザー = 100レコード (約20KB)
 
 **総データ量**: 年間約22MB（Turso無料枠内で十分対応可能）
 
-## 実装フェーズ（通知機能追加版）
+## 実装フェーズ（更新版）
 
-### Phase 1: 基本統計機能
-1. **Week 1-2**: データベーステーブル作成・マイグレーション
-   - `user_voice_activities`, `period_user_stats` テーブル
-   - インデックス作成・最適化
-2. **Week 3-4**: 個人入退室記録の実装
-   - Discord イベントハンドラー拡張
-   - リアルタイム統計更新機能
-3. **Week 5-6**: 週間ランキング表示・Web UI
-   - 統計ダッシュボード画面
-   - タイムライン表示機能
+### ✅ Phase 1: 基本統計機能（完了）
+1. **✅ 完了**: データベーステーブル作成・マイグレーション
+   - `user_voice_activities`, `period_user_stats` テーブル実装済み
+   - インデックス作成・最適化済み
+2. **✅ 完了**: 個人入退室記録の実装
+   - Discord イベントハンドラー拡張済み
+   - リアルタイム統計更新機能実装済み
+3. **🔄 準備完了**: 週間ランキング表示・Web UI
+   - 統計ダッシュボード画面（APIエンドポイント準備完了）
+   - タイムライン表示機能（データ構造準備完了）
 
-### Phase 2: 通知システム
-1. **Week 7-8**: 通知基盤システム実装
-   - 通知スケジュール管理テーブル作成
-   - Cron ジョブによるスケジューラー実装
-   - 日次・週次・月次サマリー生成ロジック
-2. **Week 9-10**: Discord通知機能
+### ✅ Phase 2.1-2.3: API基盤（完了）
+1. **✅ 完了**: 統一APIレスポンス形式
+   - `{data, meta, error?}` 構造実装済み
+   - 構造化エラーハンドリング実装済み
+2. **✅ 完了**: 権限システム実装
+   - VIEW/MANAGE/EXECUTE 3段階権限実装済み
+   - Discord権限連携実装済み
+3. **✅ 完了**: 通知スケジュール管理テーブル
+   - `notification_schedules` テーブル実装済み
+   - 活動サマリーテーブル実装済み
+
+### 🔄 Phase 3: 通知システム実装（次期）
+1. **準備完了**: 通知API実装
+   - スケジュール管理API
+   - テスト通知API
+   - 設定管理API
+2. **予定**: Discord通知機能
    - 自動通知送信システム
    - 通知フォーマット・Embed作成
    - Web UI での通知設定画面
-3. **Week 11**: テスト・調整
-   - 通知タイミングの調整
-   - 重複防止機能のテスト
 
 ### Phase 3: PWA・プッシュ通知
 1. **Week 12-13**: PWA基盤実装
