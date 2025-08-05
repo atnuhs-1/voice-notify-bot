@@ -11,11 +11,9 @@ import {
   getLast30DaysPeriod,
   getPeriodFromDate,
   getRelativePeriod,
-  getPeriodDays,
   getWeekNumber,
 } from '../utils/period';
 import {
-  formatPeriod,
   validatePeriod as validatePeriodInternal,
   isValidDateRange,
   formatDate,
