@@ -52,11 +52,12 @@
 - **期間別統計計算の基盤**（週間・月間・年間統計）
 - **通知スケジュール管理テーブル**（notification_schedules等）
 - **構造化エラーハンドリング**（統一エラーコード・メッセージ）
+- **✅ NEW: 統計API実装完了**（ランキング・タイムライン・サマリー履歴）
+- **✅ NEW: Fastifyプラグインシステム**（response, permission, validation）
 
 ### 🔄 拡張予定機能
-- 統計・ランキングAPI実装
-- 実際の通知システムロジック
-- タイムライン表示API
+- 実際の通知システムロジック（自動通知送信・スケジューラー）
+- フロントエンド統計ダッシュボード
 - PWAプッシュ通知
 
 ## API設計
@@ -709,8 +710,8 @@ await fastify.register(envPlugin)         // 環境変数管理
 await fastify.register(databasePlugin)    // Turso接続 + DatabaseHelpers
 await fastify.register(discordPlugin)     // Discord.js + イベントハンドラー
 await fastify.register(authPlugin)        // JWT認証システム
-await fastify.register(responsePlugin)    // 統一APIレスポンス ← NEW
-await fastify.register(permissionPlugin)  // 権限チェックシステム ← NEW
+await fastify.register(responsePlugin)    // 統一APIレスポンス ✅ 実装完了
+await fastify.register(permissionPlugin)  // 権限チェックシステム ✅ 実装完了
 await fastify.register(commandsPlugin)    // Discord スラッシュコマンド
 await fastify.register(keepalivePlugin)   // ヘルスチェック
 ```

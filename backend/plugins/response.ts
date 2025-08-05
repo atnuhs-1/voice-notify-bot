@@ -14,6 +14,14 @@ function generateRequestId(): string {
 
 // 統一レスポンス形式のヘルパー関数
 declare module 'fastify' {
+  interface FastifyInstance {
+    generateRequestId(): string;
+    createErrorResponse(
+      error: { code: APIErrorCode; message: string; details?: any },
+      requestId?: string
+    ): APIResponse<null>;
+  }
+  
   interface FastifyReply {
     success<T>(data: T, meta?: Partial<APIResponseMeta>): FastifyReply;
     error(
@@ -151,6 +159,24 @@ const responsePlugin: FastifyPluginAsync = async (fastify) => {
       message,
       401
     );
+  });
+
+    // ユーティリティ関数をfastifyインスタンスに追加
+  fastify.decorate('generateRequestId', generateRequestId);
+  
+  fastify.decorate('createErrorResponse', function(
+    error: { code: APIErrorCode; message: string; details?: any },
+    requestId?: string
+  ) {
+    const response: APIResponse<null> = {
+      data: null,
+      meta: {
+        timestamp: new Date().toISOString(),
+        requestId: requestId || generateRequestId()
+      },
+      error
+    };
+    return response;
   });
 
   // グローバルエラーハンドラー

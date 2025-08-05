@@ -227,7 +227,63 @@ import { DatabaseHelpers } from './database.js';
 - ts-node実行時は`.ts`ファイルを直接読み込む
 - `.js`拡張子を指定するとモジュールが見つからないエラーが発生
 
+### Fastify AutoLoadプラクティス
+**重要**: このプロジェクトはFastify AutoLoadを使用しているため、以下のルールを厳守：
+
+#### ✅ AutoLoad使用時のベストプラクティス
+```typescript
+// ❌ 悪い例: AutoLoadと手動登録の併用（重複エラーの原因）
+// routes/api/index.ts
+await fastify.register(import('./v1'), { prefix: '/v1' }); // AutoLoadと重複
+
+// ✅ 良い例: AutoLoadに完全に依存
+// routes/api/index.ts  
+// AutoLoadが自動的にv1/ディレクトリを /v1 プレフィックスで読み込む
+```
+
+#### index.tsファイルの取り扱い
+- **問題**: `index.ts`が存在すると、同ディレクトリの他のファイルが**無視される**
+- **対策**: 単純な再エクスポートの場合は`index.ts`を作成しない
+
+```bash
+# ❌ 問題のある構成
+routes/api/v1/guilds/
+├── index.ts          # これが存在すると
+├── rankings.ts       # これらが無視される
+├── timeline.ts
+└── summaries.ts
+
+# ✅ 正しい構成  
+routes/api/v1/guilds/
+├── rankings.ts       # AutoLoadが直接読み込む
+├── timeline.ts       # AutoLoadが直接読み込む
+└── summaries.ts      # AutoLoadが直接読み込む
+```
+
+#### ルート重複エラーの回避
+```typescript
+// 共通エラー: FST_ERR_DUPLICATED_ROUTE
+// 原因: 同じルートが複数回登録される
+
+// デバッグ方法: サーバー起動時にルート一覧を確認
+fastify.ready().then(() => {
+  console.log('\n📋 Registered routes:')
+  console.log(fastify.printRoutes())
+})
+```
+
 ### その他のコーディング規則
 - プラグインでの`dependencies`配列は不要（app.tsで明示的に順序管理）
 - 型安全性を重視し、`| null`型の適切なnullチェック
 - 統一APIレスポンス形式 `{data, meta, error?}` の使用
+
+## トラブルシューティング
+
+### メモリ
+
+#### APIルートのロード失敗トラブルシューティング
+- パスの設定を再確認する
+- プラグインの読み込み順序を見直す
+- ルートファイルのパスが正しいか検証する
+- Fastifyのルート読み込みメカニズムを確認する
+- 環境変数やパスの絶対パス/相対パスの設定を確認する

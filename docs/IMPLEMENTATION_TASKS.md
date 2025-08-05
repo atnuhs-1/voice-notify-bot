@@ -127,21 +127,53 @@
   - **内容**: 構造化エラーレスポンス
   - **ユーザビリティ**: わかりやすいエラーメッセージ
 
-### 2.4 統計API実装
-- [ ] **2.4.1** ランキングAPI
-  - **ファイル**: `backend/routes/api/v1/guilds/[guildId]/statistics/rankings.ts` (新規作成)
+### 2.4 統計API実装 ✅ **Phase 2.4 完了**
+- [x] **2.4.1** ランキングAPI **✅ 実装完了**
+  - **ファイル**: `backend/routes/api/v1/guilds/rankings.ts`
   - **エンドポイント**: `GET /api/v1/guilds/{guildId}/statistics/rankings`
-  - **機能**: 柔軟な期間指定・メトリクス指定・比較機能
+  - **機能**: 柔軟な期間指定・メトリクス指定・前期間比較機能
+  - **実装内容**: 
+    - 完全なバリデーション（日付・メトリクス・権限）
+    - 前期間比較機能（変化量・変化率・順位変動）
+    - 統一APIレスポンス形式対応
+    - Fastify AutoLoad対応
 
-- [ ] **2.4.2** タイムラインAPI
-  - **ファイル**: `backend/routes/api/v1/guilds/[guildId]/statistics/timeline.ts` (新規作成)
+- [x] **2.4.2** タイムラインAPI **✅ 実装完了**
+  - **ファイル**: `backend/routes/api/v1/guilds/timeline.ts`
   - **エンドポイント**: `GET /api/v1/guilds/{guildId}/statistics/timeline`
   - **機能**: 指定時間範囲での詳細セッション履歴
+  - **実装内容**: 
+    - 重複セッション・継続中セッション処理
+    - Discord APIによるチャンネル名補完
+    - 期間制限・パフォーマンス最適化
+    - ユーザー別セッション集約
 
-- [ ] **2.4.3** サマリー履歴API
-  - **ファイル**: `backend/routes/api/v1/guilds/[guildId]/statistics/summaries.ts` (新規作成)
+- [x] **2.4.3** サマリー履歴API **✅ 実装完了**
+  - **ファイル**: `backend/routes/api/v1/guilds/summaries.ts`
   - **エンドポイント**: `GET /api/v1/guilds/{guildId}/statistics/summaries`
   - **機能**: 日次・週次・月次サマリーの履歴取得
+  - **実装内容**: 
+    - ページネーション（limit/offset）
+    - 期間フィルタリング（from/to）
+    - 通知状態管理・サマリー種別対応
+    - 将来の通知システムとの連携準備
+
+- [x] **2.4.4** 統計計算ユーティリティ **✅ 実装完了**
+  - **ファイル**: `backend/utils/statistics.ts`, `backend/utils/validation.ts`
+  - **機能**: 統計計算・バリデーション・データ処理
+  - **実装内容**:
+    - ランキング計算・前期間比較ロジック
+    - タイムライン生成・重複処理
+    - 包括的なバリデーション関数
+    - 日付・期間計算ユーティリティ
+
+**Phase 2.4 実装成果:**
+- 3つの統計APIエンドポイント完全実装
+- Fastify AutoLoad対応・ルート重複問題解決
+- 統一APIレスポンス形式・構造化エラーハンドリング
+- 権限チェック・認証統合
+- 前期間比較・詳細統計機能
+- 次フェーズ（フロントエンド統計ダッシュボード）への基盤完了
 
 ## Phase 3: フロントエンド統計画面
 
