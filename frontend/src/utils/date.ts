@@ -1,3 +1,4 @@
+
 import type { PeriodSelection } from '../types/statistics';
 import { getWeekNumber } from './period';
 
@@ -33,9 +34,10 @@ export function formatDateTime(date: Date): string {
   });
 }
 
-// 時刻のみをフォーマット
-export function formatTime(date: Date): string {
-  return date.toLocaleTimeString('ja-JP', {
+// 時刻のみをフォーマット（Date またはISO文字列）
+export function formatTime(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
+  return dateObj.toLocaleTimeString('ja-JP', {
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -117,11 +119,12 @@ export function getDaysDifference(from: string, to: string): number {
   return Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-// 相対的な日付表示（今日、昨日、N日前）
-export function formatRelativeDate(date: Date): string {
+// 相対的な日付表示（今日、昨日、N日前）（Date またはISO文字列）
+export function formatRelativeDate(date: Date | string): string {
+  const dateObj = typeof date === 'string' ? new Date(date) : date;
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const targetDate = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
   
   const diffTime = targetDate.getTime() - today.getTime();
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
@@ -137,7 +140,7 @@ export function formatRelativeDate(date: Date): string {
   } else if (diffDays < -1 && diffDays >= -7) {
     return `${Math.abs(diffDays)}日前`;
   } else {
-    return formatDate(date);
+    return formatDate(dateObj);
   }
 }
 
@@ -199,6 +202,18 @@ export function getYesterdayString(): string {
   yesterday.setDate(yesterday.getDate() - 1);
   return yesterday.toISOString().split('T')[0];
 }
+
+// 数値を3桁区切りでフォーマット
+export function formatNumber(num: number): string {
+  return num.toLocaleString('ja-JP');
+}
+
+// パーセンテージ変化をフォーマット
+export function formatChangePercentage(percentage: number): string {
+  const sign = percentage > 0 ? '+' : '';
+  return `${sign}${percentage.toFixed(1)}%`;
+}
+
 
 // 期間の妥当性を詳細にバリデート
 export function validatePeriod(period: PeriodSelection): { isValid: boolean; error?: string } {
