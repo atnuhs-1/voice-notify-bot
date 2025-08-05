@@ -16,4 +16,7 @@ const support: FastifyPluginAsync = async function (fastify, opts) {
   })
 }
 
-export default fp(support)
+export default fp(support, {
+  name: 'support',
+  dependencies: [] // 他のプラグインに依存しない場合は空
+})

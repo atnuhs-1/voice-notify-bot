@@ -9,6 +9,8 @@ import envPlugin from './plugins/env'
 import databasePlugin from './plugins/database'
 import discordPlugin from './plugins/discord'
 import authPlugin from './plugins/auth'
+import responsePlugin from './plugins/response'
+import permissionPlugin from './plugins/permission'
 import commandsPlugin from './plugins/commands'
 import keepalivePlugin from './plugins/keepalive'
 
@@ -38,8 +40,14 @@ const app: FastifyPluginAsync<AppOptions> = async (
   await fastify.register(discordPlugin)
   fastify.log.info('✅ Discord plugin loaded')
 
-  await fastify.register(authPlugin)           // 認証プラグイン追加
+  await fastify.register(authPlugin)
   fastify.log.info('✅ Authentication plugin loaded')
+  
+  await fastify.register(responsePlugin)
+  fastify.log.info('✅ Response plugin loaded')
+  
+  await fastify.register(permissionPlugin)
+  fastify.log.info('✅ Permission plugin loaded')
   
   await fastify.register(commandsPlugin)
   fastify.log.info('✅ Commands plugin loaded')
