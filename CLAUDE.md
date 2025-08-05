@@ -49,6 +49,8 @@ Discord通知ボット + Webダッシュボードのモノレポ構成。バッ�
 
 ## アーキテクチャ構造
 
+@docs/API_SPECIFICATION.md を参照してください
+
 ### バックエンド構造 (Fastify API + Discord Bot)
 - **server.ts**: サーバーエントリーポイント（グレースフルシャットダウン対応）
 - **app.ts**: Fastifyアプリケーションセットアップ（依存関係順でプラグイン読み込み）
@@ -73,6 +75,9 @@ Discord通知ボット + Webダッシュボードのモノレポ構成。バッ�
 - **utils/**: APIクライアントとユーティリティ関数
 
 ### データベース設計
+
+@docs/DATABASE_DESIGN.md を参照してください
+
 Turso (SQLite) を使用し、以下のテーブル構成：
 
 #### 既存テーブル
@@ -170,6 +175,8 @@ VAPID_SUBJECT=mailto:your-email@example.com
 - 統一されたAPIエラーレスポンス形式
 
 ## 実装予定機能
+
+@docs/IMPLEMENTATION.md を参照してください
 
 ### 統計機能
 - ボイスチャンネル滞在時間ランキング
