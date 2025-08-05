@@ -1,4 +1,25 @@
+import type { 
+  APIResponse, 
+  APIError, 
+  RankingQuery, 
+  TimelineQuery, 
+  SummariesQuery 
+} from '../types/statistics';
+
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+// APIエラーハンドリング用のカスタムエラークラス
+export class APIException extends Error {
+  public readonly code: string;
+  public readonly details?: any;
+
+  constructor(message: string, code: string, details?: any) {
+    super(message);
+    this.name = 'APIException';
+    this.code = code;
+    this.details = details;
+  }
+}
 
 // 認証ヘッダー付きAPI呼び出し関数
 const apiCall = async (endpoint: string, options?: RequestInit) => {
@@ -35,11 +56,18 @@ const apiCall = async (endpoint: string, options?: RequestInit) => {
     throw new Error('認証が期限切れです。再ログインしてください。');
   }
 
+  const data = await response.json();
+
   if (!response.ok) {
-    throw new Error(`API Error: ${response.status}`);
+    // 新API設計のエラーレスポンス処理
+    if (data.error) {
+      const apiError = data.error as APIError;
+      throw new APIException(apiError.message, apiError.code, apiError.details);
+    }
+    throw new Error(`API Error: ${response.status} ${response.statusText}`);
   }
 
-  return response.json();
+  return data;
 };
 
 // データ取得API
@@ -138,3 +166,123 @@ export const fetchCurrentUser = () => apiCall('/api/auth/me');
 export const logoutUser = () => apiCall('/api/auth/logout', {
   method: 'POST',
 });
+
+// === 新統計API（v1エンドポイント） ===
+
+// ランキング取得API
+export const fetchRankings = async (
+  guildId: string, 
+  query: RankingQuery
+): Promise<APIResponse<any>> => {
+  const params = new URLSearchParams();
+  params.append('metric', query.metric);
+  params.append('from', query.from);
+  params.append('to', query.to);
+  if (query.limit) params.append('limit', query.limit.toString());
+  if (query.compare !== undefined) params.append('compare', query.compare.toString());
+
+  return apiCall(`/api/v1/guilds/${guildId}/statistics/rankings?${params.toString()}`);
+};
+
+// タイムライン取得API  
+export const fetchTimeline = async (
+  guildId: string,
+  query: TimelineQuery
+): Promise<APIResponse<any>> => {
+  const params = new URLSearchParams();
+  params.append('from', query.from);
+  params.append('to', query.to);
+
+  return apiCall(`/api/v1/guilds/${guildId}/statistics/timeline?${params.toString()}`);
+};
+
+// サマリー履歴取得API
+export const fetchSummaries = async (
+  guildId: string,
+  query: SummariesQuery
+): Promise<APIResponse<any>> => {
+  const params = new URLSearchParams();
+  params.append('type', query.type);
+  if (query.from) params.append('from', query.from);
+  if (query.to) params.append('to', query.to);
+  if (query.limit) params.append('limit', query.limit.toString());
+  if (query.offset) params.append('offset', query.offset.toString());
+
+  return apiCall(`/api/v1/guilds/${guildId}/statistics/summaries?${params.toString()}`);
+};
+
+// 通知設定取得API
+export const fetchNotificationSchedules = async (
+  guildId: string
+): Promise<APIResponse<any>> => {
+  return apiCall(`/api/v1/guilds/${guildId}/notifications/schedules`);
+};
+
+// 通知設定更新API
+export const updateNotificationSchedule = async (
+  guildId: string,
+  scheduleType: 'daily' | 'weekly' | 'monthly',
+  settings: any
+): Promise<APIResponse<any>> => {
+  return apiCall(`/api/v1/guilds/${guildId}/notifications/schedules/${scheduleType}`, {
+    method: 'PUT',
+    body: JSON.stringify(settings),
+  });
+};
+
+// テスト通知送信API
+export const sendTestNotification = async (
+  guildId: string,
+  testData: {
+    scheduleType: 'daily' | 'weekly' | 'monthly';
+    targetChannelId: string;
+    testData?: any;
+  }
+): Promise<APIResponse<any>> => {
+  return apiCall(`/api/v1/guilds/${guildId}/notifications/test`, {
+    method: 'POST',
+    body: JSON.stringify(testData),
+  });
+};
+
+// サーバー設定取得API
+export const fetchGuildSettings = async (
+  guildId: string
+): Promise<APIResponse<any>> => {
+  return apiCall(`/api/v1/guilds/${guildId}/settings`);
+};
+
+// 機能設定更新API
+export const updateGuildFeatures = async (
+  guildId: string,
+  features: {
+    statisticsEnabled?: boolean;
+    notificationsEnabled?: boolean;
+    timelineEnabled?: boolean;
+  }
+): Promise<APIResponse<any>> => {
+  return apiCall(`/api/v1/guilds/${guildId}/settings/features`, {
+    method: 'PUT',
+    body: JSON.stringify(features),
+  });
+};
+
+// 統計データリフレッシュAPI
+export const refreshStatistics = async (
+  guildId: string
+): Promise<APIResponse<any>> => {
+  return apiCall(`/api/v1/guilds/${guildId}/statistics/refresh`, {
+    method: 'POST',
+  });
+};
+
+// 変更検出API
+export const checkStatisticsChanges = async (
+  guildId: string,
+  since: string
+): Promise<APIResponse<any>> => {
+  const params = new URLSearchParams();
+  params.append('since', since);
+  
+  return apiCall(`/api/v1/guilds/${guildId}/statistics/changes?${params.toString()}`);
+};
