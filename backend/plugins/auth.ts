@@ -1,6 +1,6 @@
 import fp from 'fastify-plugin'
 import jwt from 'jsonwebtoken'
-import type { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify'
+import type { FastifyPluginAsync, FastifyRequest, FastifyReply, FastifyInstance } from 'fastify'
 
 // JWT ペイロードの型定義
 interface JWTPayload {
@@ -50,7 +50,7 @@ declare module 'fastify' {
   }
 }
 
-const authPlugin: FastifyPluginAsync = async (fastify) => {
+const authPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // 環境変数のチェック
   const requiredEnvVars = [
     'DISCORD_CLIENT_ID',
