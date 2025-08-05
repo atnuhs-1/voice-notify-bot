@@ -981,3 +981,63 @@ npm run test:integration
 # 型チェック
 npm run type-check
 ```
+
+## フロントエンド実装状況
+
+### ✅ 実装完了項目（Phase 3.1）
+
+#### API通信基盤
+- **統一APIクライアント**: `frontend/src/utils/api.ts`
+  - 新API設計（v1エンドポイント）対応完了
+  - 統一レスポンス形式 `APIResponse<T>` 処理
+  - 構造化エラーハンドリング（`APIException`クラス）
+  - 全統計API関数群実装済み
+
+#### Reactフック
+- **統計データフック**: `frontend/src/hooks/useStatistics.ts`
+  - ランキング・タイムライン・サマリー取得機能
+  - 自動更新・手動更新・差分更新対応
+  - エラーハンドリング・ローディング状態管理
+  - 期間・メトリクス設定の動的管理
+
+- **期間選択フック**: `frontend/src/hooks/usePeriodSelector.ts`
+  - 週・月・年・カスタム期間の管理
+  - 豊富なプリセット（今週・先週・今月・過去7日等）
+  - 期間ナビゲーション・バリデーション・フォーマット
+
+#### ユーティリティ関数
+- **期間計算**: `frontend/src/utils/period.ts`
+  - 期間生成・相対期間移動・日数計算機能
+  - 週番号計算・期間バリデーション
+
+- **日付処理**: `frontend/src/utils/date.ts`
+  - 日本語形式・短縮形式フォーマット
+  - 時間長フォーマット（秒→時間分秒変換）
+  - 相対日付表示・詳細バリデーション
+
+#### 型定義
+- **統計型定義**: `frontend/src/types/statistics.ts`
+  - 完全な型安全性を保証
+  - APIレスポンス・UI状態・フォーム用型定義
+  - バックエンドAPI型との完全一致
+
+### 🔄 次期実装予定（Phase 3.2）
+
+#### 統計表示コンポーネント
+- **ランキング表示**: `frontend/src/components/statistics/RankingTable.tsx`
+- **タイムライン表示**: `frontend/src/components/statistics/Timeline.tsx`
+- **統計サマリー**: `frontend/src/components/statistics/StatsSummary.tsx`
+
+#### 統計ダッシュボード画面
+- **メイン統計ページ**: `frontend/src/pages/StatisticsPage.tsx`
+- **タイムライン専用ページ**: `frontend/src/pages/TimelinePage.tsx`
+- **ナビゲーション統合**: 既存ダッシュボードとの連携
+
+### 実装アーキテクチャ特徴
+
+1. **統一API設計対応**: バックエンドv1 APIと完全連携
+2. **エラーハンドリング**: 構造化エラーレスポンスの適切な処理
+3. **型安全性**: TypeScript型定義による完全な型チェック
+4. **パフォーマンス最適化**: 自動更新・差分更新・キャッシュ機能
+5. **再利用性**: ユーティリティ関数の適切な分離・共通化
+6. **UX重視**: 直感的な期間選択・データ管理UI
