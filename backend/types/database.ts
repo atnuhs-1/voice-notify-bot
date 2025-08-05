@@ -42,7 +42,7 @@ export interface PeriodUserStats {
   guildId: string;
   userId: string;
   username: string;
-  periodType: 'week' | 'month' | 'year';
+  periodType: PeriodType;
   periodKey: string; // '2025-W03', '2025-01', '2025'
   totalDuration: number;
   sessionCount: number;
@@ -56,7 +56,7 @@ export interface PeriodUserStats {
 export interface NotificationSchedule {
   id: number;
   guildId: string;
-  scheduleType: 'daily' | 'weekly' | 'monthly';
+  scheduleType: ScheduleType;
   isEnabled: boolean;
   // 日次通知設定
   dailyNotificationTime: string | null; // 'HH:mm'
@@ -146,7 +146,7 @@ export interface UpdatePeriodStatsParams {
   guildId: string;
   userId: string;
   username: string;
-  periodType: 'week' | 'month' | 'year';
+  periodType: PeriodType;
   periodKey: string;
   activity: UserVoiceActivity;
 }

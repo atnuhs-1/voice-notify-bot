@@ -2,8 +2,8 @@
 // ランキング計算関数とタイムライン生成関数
 
 import type { Client } from '@libsql/client';
-import type { PeriodType, UserVoiceActivity } from '../types/database.js';
-import { getCurrentPeriodKeys, getPreviousPeriodKey, getPeriodStart, getPeriodEnd } from './period.js';
+import type { PeriodType, UserVoiceActivity } from '../types/database';
+import { getCurrentPeriodKeys, getPreviousPeriodKey, getPeriodStart, getPeriodEnd } from './period';
 
 /**
  * Phase 2.2.2: 前期間比較付きランキング計算

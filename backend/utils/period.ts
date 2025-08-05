@@ -1,7 +1,7 @@
 // Phase 2.2.1: 期間キー生成関数
 // 日本時間基準での正確な期間計算
 
-import type { PeriodType } from '../types/database.js';
+import type { PeriodType } from '../types/database';
 
 /**
  * 現在の期間キーを生成（日本時間基準）

@@ -4,7 +4,7 @@
  */
 
 import fp from 'fastify-plugin';
-import { FastifyPluginAsync, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
+import { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest, preHandlerHookHandler } from 'fastify';
 import { PermissionLevel } from '../types/api';
 
 // Fastify型拡張
@@ -14,9 +14,14 @@ declare module 'fastify' {
     checkUserPermission: (userId: string, guildId: string, level: PermissionLevel) => Promise<boolean>;
     getUserPermissionLevel: (userId: string, guildId: string) => Promise<PermissionLevel>;
   }
+
+  // Fastify Reply型拡張
+  interface FastifyReply {
+    withPermissions: (data: any, guildId: string, userId: string) => Promise<FastifyReply>;
+  }
 }
 
-const permissionPlugin: FastifyPluginAsync = async (fastify) => {
+const permissionPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // ユーザーの権限レベルを判定
   const getUserPermissionLevel = async (userId: string, guildId: string): Promise<PermissionLevel> => {
     try {
@@ -183,13 +188,6 @@ function getPermissionLevelName(level: PermissionLevel): string {
       return '実行';
     default:
       return '不明';
-  }
-}
-
-// Fastify Reply型拡張
-declare module 'fastify' {
-  interface FastifyReply {
-    withPermissions: (data: any, guildId: string, userId: string) => Promise<FastifyReply>;
   }
 }
 

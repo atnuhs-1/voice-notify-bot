@@ -21,7 +21,7 @@ declare module 'fastify' {
 }
 
 // データベースヘルパー関数の型定義
-interface DatabaseHelpers {
+export interface DatabaseHelpers {
   // Notifications テーブル操作
   getNotifications(guildId: string, textChannelId?: string): Promise<Notification[]>;
   setNotifications(guildId: string, textChannelId: string, voiceChannelIds: string[]): Promise<void>;

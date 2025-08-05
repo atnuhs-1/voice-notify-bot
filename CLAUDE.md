@@ -205,3 +205,29 @@ VAPID_SUBJECT=mailto:your-email@example.com
 - React SPAの静的デプロイ
 - 環境変数でAPIベースURL設定
 - React Routerのリライト設定
+
+## コーディング規約
+
+### TypeScript Import文の規則
+**重要**: このプロジェクトはCommonJS設定 (`"module": "commonjs"`) のため、import文では以下を厳守：
+
+```typescript
+// ✅ 正しい書き方（拡張子なし）
+import { getCurrentPeriodKeys } from '../utils/period';
+import { DatabaseHelpers } from './database';
+import { APIResponse } from '../types/api';
+
+// ❌ 間違った書き方（.js拡張子）
+import { getCurrentPeriodKeys } from '../utils/period.js';
+import { DatabaseHelpers } from './database.js';
+```
+
+**理由**: 
+- tsconfig.json で `"module": "commonjs"` を使用
+- ts-node実行時は`.ts`ファイルを直接読み込む
+- `.js`拡張子を指定するとモジュールが見つからないエラーが発生
+
+### その他のコーディング規則
+- プラグインでの`dependencies`配列は不要（app.tsで明示的に順序管理）
+- 型安全性を重視し、`| null`型の適切なnullチェック
+- 統一APIレスポンス形式 `{data, meta, error?}` の使用
