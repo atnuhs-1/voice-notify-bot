@@ -1,15 +1,18 @@
 import fp from 'fastify-plugin';
 import { Client, GatewayIntentBits, Events, VoiceState, EmbedBuilder, TextChannel } from 'discord.js';
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
+import { getCurrentPeriodKeys } from '../utils/period';
+import { DatabaseHelpers } from './database';
 
 // Discord クライアントの型定義
 declare module 'fastify' {
   interface FastifyInstance {
     discord: Client;
+    dbHelpers: DatabaseHelpers
   }
 }
 
-const discordPlugin: FastifyPluginAsync = async (fastify) => {
+const discordPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // 環境変数のチェック
   if (!process.env.DISCORD_TOKEN) {
     throw new Error('DISCORD_TOKEN environment variable is required');
@@ -57,9 +60,7 @@ const discordPlugin: FastifyPluginAsync = async (fastify) => {
 };
 
 // ボイス状態変更ハンドラー（データベースと通知機能付き）
-async function handleVoiceStateUpdate(fastify: any, oldState: VoiceState, newState: VoiceState) {
-  const { dbHelpers } = fastify;
-  
+async function handleVoiceStateUpdate(fastify: FastifyInstance, oldState: VoiceState, newState: VoiceState) {
   // ボット自身の状態変更は無視
   if (newState.member?.user.bot) return;
 
@@ -85,7 +86,7 @@ async function handleVoiceStateUpdate(fastify: any, oldState: VoiceState, newSta
 }
 
 // ユーザー入室処理
-async function handleUserJoined(fastify: any, guildId: string, channelId: string, userId: string, userName: string) {
+async function handleUserJoined(fastify: FastifyInstance, guildId: string, channelId: string, userId: string, userName: string) {
   const { discord, dbHelpers } = fastify;
   
   try {
@@ -102,10 +103,14 @@ async function handleUserJoined(fastify: any, guildId: string, channelId: string
 
     fastify.log.info(`👤 ${userName} joined voice channel: ${channelName} (${memberCount} members)`);
 
-    // 通話開始 or メンバー参加の判定
+    // セッション管理: 通話開始 or 継続の判定
+    let sessionId: number;
+    let isSessionStarter = false;
+
     if (memberCount === 1) {
       // 通話開始
-      const sessionId = await dbHelpers.startVoiceSession(guildId, channelId);
+      sessionId = await dbHelpers.startVoiceSession(guildId, channelId);
+      isSessionStarter = true;
       fastify.log.info(`🔵 Call started in ${channelName} (Session ID: ${sessionId})`);
       
       await sendNotification(fastify, guildId, channelId, 'call_start', {
@@ -115,7 +120,13 @@ async function handleUserJoined(fastify: any, guildId: string, channelId: string
         userAvatar,
       });
     } else {
-      // メンバー参加
+      // 既存セッションに参加
+      const activeSession = await dbHelpers.getActiveSession(guildId, channelId);
+      if (!activeSession) {
+        fastify.log.error(`❌ No active session found for ongoing call in channel ${channelId}`);
+        return;
+      }
+      sessionId = activeSession.id;
       fastify.log.info(`🟢 ${userName} joined ongoing call in ${channelName}`);
       
       await sendNotification(fastify, guildId, channelId, 'member_join', {
@@ -125,13 +136,32 @@ async function handleUserJoined(fastify: any, guildId: string, channelId: string
         userAvatar,
       });
     }
+
+    // 新機能: 個人の入室記録を作成
+    try {
+      await dbHelpers.createUserActivity({
+        guildId,
+        userId,
+        username: userName,
+        channelId,
+        sessionId,
+        joinTime: new Date().toISOString(),
+        isSessionStarter
+      });
+
+      fastify.log.info(`📊 User activity recorded: ${userName} joined ${channelName} (starter: ${isSessionStarter})`);
+    } catch (activityError) {
+      fastify.log.error(`❌ Failed to record user activity for ${userName}:`, activityError);
+      // 統計記録の失敗は通知機能に影響しないため、処理を継続
+    }
+
   } catch (error) {
     fastify.log.error(`❌ Error handling user joined (${userId} -> ${channelId}):`, error);
   }
 }
 
 // ユーザー退室処理
-async function handleUserLeft(fastify: any, guildId: string, channelId: string, userId: string, userName: string) {
+async function handleUserLeft(fastify: FastifyInstance, guildId: string, channelId: string, userId: string, userName: string) {
   const { discord, dbHelpers } = fastify;
   
   try {
@@ -144,7 +174,36 @@ async function handleUserLeft(fastify: any, guildId: string, channelId: string, 
 
     fastify.log.info(`👤 ${userName} left voice channel: ${channelName} (${memberCount} members remaining)`);
 
-    // 通話終了の判定
+    // 新機能: 個人の退室記録を終了し、期間別統計を更新
+    try {
+      const userActivity = await dbHelpers.endUserActivity(guildId, userId, channelId);
+      
+      if (userActivity && userActivity.duration !== null) {
+        const duration = userActivity.duration;
+        fastify.log.info(`📊 User activity ended: ${userName} left ${channelName} (Duration: ${Math.floor(duration / 60)}m ${duration % 60}s)`);
+        
+        // 期間別統計を即座に更新
+        try {
+          const periods = getCurrentPeriodKeys(new Date(userActivity.joinTime));
+          
+          // 週間、月間、年間統計を更新
+          await dbHelpers.updatePeriodStats(guildId, userId, userName, 'week', periods.currentWeek, userActivity);
+          await dbHelpers.updatePeriodStats(guildId, userId, userName, 'month', periods.currentMonth, userActivity);
+          await dbHelpers.updatePeriodStats(guildId, userId, userName, 'year', periods.currentYear, userActivity);
+          
+          fastify.log.info(`📈 Period statistics updated for ${userName}`);
+        } catch (statsError) {
+          fastify.log.error(`❌ Failed to update period statistics for ${userName}:`, statsError);
+          // 統計更新の失敗は他の処理に影響しないため、処理を継続
+        }
+      } else {
+        fastify.log.warn(`⚠️ No active user activity found for ${userName} in ${channelName}`);
+      }
+    } catch (activityError) {
+      fastify.log.error(`❌ Failed to end user activity for ${userName}:`, activityError);
+    }
+
+    // セッション管理: 通話終了の判定
     if (memberCount === 0) {
       // 通話終了
       const endedSession = await dbHelpers.endVoiceSession(guildId, channelId);
@@ -167,7 +226,7 @@ async function handleUserLeft(fastify: any, guildId: string, channelId: string, 
 }
 
 // 通知送信処理
-async function sendNotification(fastify: any, guildId: string, voiceChannelId: string, type: string, data: any) {
+async function sendNotification(fastify: FastifyInstance, guildId: string, voiceChannelId: string, type: string, data: any) {
   const { discord, dbHelpers } = fastify;
   
   try {
