@@ -23,12 +23,19 @@ export class APIException extends Error {
 
 // 認証ヘッダー付きAPI呼び出し関数
 const apiCall = async (endpoint: string, options?: RequestInit) => {
+  const fullUrl = `${API_BASE_URL}${endpoint}`;
+  
+  // console.log('API呼び出し:', fullUrl);
+  
   // ローカルストレージからトークンを取得
   const token = localStorage.getItem('discord_auth_token');
   
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
+  const headers: Record<string, string> = {};
+  
+  // bodyがある場合のみContent-Typeを設定
+  if (options?.body) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   // 既存のヘッダーがある場合は安全に追加
   if (options?.headers) {
@@ -41,12 +48,17 @@ const apiCall = async (endpoint: string, options?: RequestInit) => {
   // トークンがある場合は認証ヘッダーを追加
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    // console.log('認証トークン設定済み');
+  } else {
+    console.warn('認証トークンが見つかりません');
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(fullUrl, {
     ...options,
     headers,
   });
+  
+  // console.log('API レスポンス:', response.status);
 
   // 401エラーの場合は認証切れ
   if (response.status === 401) {
@@ -57,8 +69,22 @@ const apiCall = async (endpoint: string, options?: RequestInit) => {
   }
 
   const data = await response.json();
+  
+  // console.log('レスポンスデータ取得完了:', data.data ? 'データあり' : 'データなし');
+  
+  // ランキングデータの場合は簡潔にログ出力
+  if (fullUrl.includes('/statistics/rankings')) {
+    const rankingCount = data.data?.rankings?.length || 0;
+    if (rankingCount === 0) {
+      console.log('ランキングデータなし - 期間内に活動データがありません');
+    } else {
+      console.log(`ランキングデータ取得: ${rankingCount}件`);
+    }
+  }
 
   if (!response.ok) {
+    console.error('API エラー:', response.status, response.statusText, fullUrl);
+    
     // 新API設計のエラーレスポンス処理
     if (data.error) {
       const apiError = data.error as APIError;
@@ -67,6 +93,7 @@ const apiCall = async (endpoint: string, options?: RequestInit) => {
     throw new Error(`API Error: ${response.status} ${response.statusText}`);
   }
 
+  // console.log('API呼び出し成功:', fullUrl);
   return data;
 };
 
@@ -271,9 +298,20 @@ export const updateGuildFeatures = async (
 export const refreshStatistics = async (
   guildId: string
 ): Promise<APIResponse<any>> => {
-  return apiCall(`/api/v1/guilds/${guildId}/statistics/refresh`, {
-    method: 'POST',
-  });
+  console.log('🔄 refreshStatistics開始:', { guildId, timestamp: new Date().toISOString() });
+  
+  try {
+    const result = await apiCall(`/api/v1/guilds/${guildId}/statistics/refresh`, {
+      method: 'POST',
+      body: JSON.stringify({}), // 空のJSONオブジェクトを送信
+    });
+    
+    console.log('✅ refreshStatistics成功:', { guildId, result });
+    return result;
+  } catch (error) {
+    console.error('❌ refreshStatistics失敗:', { guildId, error });
+    throw error;
+  }
 };
 
 // 変更検出API

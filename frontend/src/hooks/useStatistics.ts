@@ -28,6 +28,11 @@ interface UseStatisticsOptions {
 export const useStatistics = (guildId: string, options: UseStatisticsOptions = {}) => {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { autoRefresh = false, refreshInterval = 30000 } = options;
+  
+  // guildId変更時の処理
+  useEffect(() => {
+    // console.log('useStatistics: guildId changed to', guildId);
+  }, [guildId, isAuthenticated, authLoading]);
 
   const [state, setState] = useState<StatisticsState>({
     loading: false,
@@ -141,6 +146,8 @@ export const useStatistics = (guildId: string, options: UseStatisticsOptions = {
 
     const rankings = await fetchRankingData(query);
     if (rankings) {
+      // console.log('ランキングデータ取得完了:', rankings.rankings?.length || 0, '件');
+      
       updateState({
         data: { ...state.data, rankings },
       });
@@ -191,16 +198,18 @@ export const useStatistics = (guildId: string, options: UseStatisticsOptions = {
 
   // 全データの再読み込み
   const refreshAllData = useCallback(async () => {
-    if (!isAuthenticated || !guildId) return;
+    if (!isAuthenticated || !guildId) {
+      // console.log('API呼び出し条件不足:', { isAuthenticated, guildId });
+      return;
+    }
 
     try {
       setError(null);
       setLoading(true);
-
-      // サーバー側でデータ更新を実行
-      await refreshStatistics(guildId);
-
-      // 全てのデータを並行して取得
+      
+      // console.log('refreshAllData開始:', guildId);
+      
+      // 実装済みのAPIを個別に実行
       await Promise.all([
         loadRankings(),
         loadTimeline(),
@@ -208,17 +217,19 @@ export const useStatistics = (guildId: string, options: UseStatisticsOptions = {
       ]);
 
       setLastUpdate(new Date().toISOString());
+      // console.log('refreshAllData完了');
     } catch (error) {
+      console.error('統計データ更新エラー:', error);
+      
       if (error instanceof APIException) {
         setError(`データ更新エラー: ${error.message}`);
       } else {
         setError('データの更新に失敗しました');
       }
-      console.error('Data refresh error:', error);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, guildId, loadRankings, loadTimeline, loadSummaries, setError, setLoading]);
+  }, [isAuthenticated, guildId, setError, setLoading]);
 
   // 変更検出と差分更新
   const checkForUpdates = useCallback(async () => {
@@ -285,9 +296,7 @@ export const useStatistics = (guildId: string, options: UseStatisticsOptions = {
 
   // 認証状態変更時の初期データ読み込み
   useEffect(() => {
-    if (isAuthenticated && !authLoading && guildId) {
-      refreshAllData();
-    } else if (!isAuthenticated) {
+    if (!isAuthenticated) {
       // 認証切れ時のデータクリア
       updateState({
         data: {
@@ -298,14 +307,17 @@ export const useStatistics = (guildId: string, options: UseStatisticsOptions = {
         error: null,
       });
     }
-  }, [isAuthenticated, authLoading, guildId, refreshAllData, updateState]);
+    if (isAuthenticated && !authLoading && guildId) {
+      refreshAllData();
+    }
+  }, [isAuthenticated, authLoading, guildId, updateState, refreshAllData]);
 
   // 期間・メトリクス変更時の自動再読み込み
   useEffect(() => {
     if (isAuthenticated && guildId) {
-      loadRankings();
+      refreshAllData();
     }
-  }, [state.settings.selectedPeriod, state.settings.selectedMetric, isAuthenticated, guildId, loadRankings]);
+  }, [state.settings.selectedPeriod, state.settings.selectedMetric, isAuthenticated, guildId, refreshAllData]);
 
   return {
     // データ

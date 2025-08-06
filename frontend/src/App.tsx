@@ -1,15 +1,18 @@
-import { useState } from 'react'
+// React Router based app
 import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './hooks/useAuth'
 import LoginScreen from './components/LoginScreen'
 import ErrorDisplay from './components/ErrorDisplay'
 import LoadingScreen from './components/LoadingScreen'
-import Header from './components/Header'
-import TabNavigation from './components/TabNavigation'  
 import NeonDashboard from './components/NeonDashboard'
+import Layout from './components/layout/Layout'
+import DashboardPage from './pages/DashboardPage'
+import ChannelsPage from './pages/ChannelsPage'
+import MembersPage from './pages/MembersPage'
+import VoicePage from './pages/VoicePage'
+import MessagesPage from './pages/MessagesPage'
 import { useDiscordData } from './hooks/useDiscordData'
 import './App.css'
-import TabContainer from './components/TabContainer'
 
 // デザイン切り替えボタンコンポーネント
 function ThemeToggle() {
@@ -48,18 +51,13 @@ function ThemeToggle() {
   )
 }
 
-// 通常のダッシュボード（現在のデザイン）
+// 通常のダッシュボード（新しい設計）
 function NormalDashboard() {
-  const [activeTab, setActiveTab] = useState('overview')
-  const { user } = useAuth()
-  
   const {
     guilds,
     selectedGuild,
     setSelectedGuild,
     stats,
-    loading,
-    result,
     loadData,
     showResult
   } = useDiscordData()
@@ -67,48 +65,8 @@ function NormalDashboard() {
   // 選択中のサーバーデータ
   const selectedGuildData = guilds.find(g => g.id === selectedGuild)
 
-  // データローディング中
-  if (loading) {
-    return (
-      <LoadingScreen
-        message="データを読み込み中..."
-        submessage={user ? `ようこそ、${user.tag} さん` : undefined}
-        showProgress={true}
-      />
-    )
-  }
-
-  // 管理権限のあるサーバーがない場合
-  if (guilds.length === 0) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <div className="bg-white/10 backdrop-blur-md rounded-2xl p-8 border border-white/20 max-w-md w-full text-center">
-          <div className="text-6xl mb-4">🚫</div>
-          <h2 className="text-2xl font-bold text-white mb-4">アクセス権限がありません</h2>
-          <p className="text-white/80 mb-6">
-            このBotが参加しているサーバーで管理者権限を持っていません。
-          </p>
-          <div className="bg-white/5 rounded-lg p-4 mb-6">
-            <h3 className="text-white font-semibold mb-2">必要な条件:</h3>
-            <ul className="text-white/70 text-sm text-left space-y-1">
-              <li>• Botが参加しているサーバー</li>
-              <li>• ユーザーも参加しているサーバー</li>  
-              <li>• ユーザーが管理者権限を持っているサーバー</li>
-            </ul>
-          </div>
-          <button
-            onClick={() => window.location.reload()}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors"
-          >
-            再読み込み
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  // タブコンテンツの共通プロパティ
-  const tabProps = {
+  // 共通のページプロパティ
+  const pageProps = {
     guilds,
     selectedGuild,
     selectedGuildData,
@@ -119,34 +77,28 @@ function NormalDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-primary text-gray-800 leading-relaxed">
-      <div className="max-w-7xl mx-auto p-4">
-        {/* ヘッダー */}
-        <Header
-          stats={stats}
-          guilds={guilds}
-          selectedGuild={selectedGuild}
-          setSelectedGuild={setSelectedGuild}
-          selectedGuildData={selectedGuildData}
+    <Layout
+      guilds={guilds}
+      selectedGuild={selectedGuild}
+      setSelectedGuild={setSelectedGuild}
+    >
+      <Routes>
+        <Route 
+          path="/" 
+          element={
+            <DashboardPage 
+              selectedGuild={selectedGuild}
+              selectedGuildData={selectedGuildData}
+              showResult={showResult}
+            />
+          } 
         />
-
-        {/* タブナビゲーション */}
-        <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
-
-        
-          <TabContainer activeTab={activeTab} {...tabProps} />
- 
-
-        {/* 結果メッセージ */}
-        {result && (
-          <div className={`fixed bottom-4 right-4 p-4 rounded-lg text-white ${
-            result.type === 'success' ? 'bg-green-600' : 'bg-red-600'
-          }`}>
-            {result.message}
-          </div>
-        )}
-      </div>
-    </div>
+        <Route path="/channels" element={<ChannelsPage {...pageProps} />} />
+        <Route path="/members" element={<MembersPage {...pageProps} />} />
+        <Route path="/voice" element={<VoicePage {...pageProps} />} />
+        <Route path="/messages" element={<MessagesPage {...pageProps} />} />
+      </Routes>
+    </Layout>
   )
 }
 
@@ -161,8 +113,8 @@ function AuthenticatedApp() {
     <Router>
       <ThemeToggle />
       <Routes>
-        <Route path="/" element={<NormalDashboard />} />
         <Route path="/neon" element={<NeonDashboardWrapper />} />
+        <Route path="/*" element={<NormalDashboard />} />
       </Routes>
     </Router>
   )
