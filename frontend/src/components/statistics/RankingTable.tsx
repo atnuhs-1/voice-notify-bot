@@ -9,6 +9,7 @@ interface RankingTableProps {
   error: string | null;
   showComparison?: boolean;
   limit?: number;
+  theme?: 'normal' | 'neon';
 }
 
 const RankingTable: React.FC<RankingTableProps> = ({
@@ -17,8 +18,48 @@ const RankingTable: React.FC<RankingTableProps> = ({
   loading,
   error,
   showComparison = true,
-  limit = 10
+  limit = 10,
+  theme = 'neon'
 }) => {
+  
+  // テーマに基づくスタイルクラス
+  const getThemeClasses = () => {
+    if (theme === 'normal') {
+      return {
+        container: 'bg-white rounded-lg border border-gray-200 overflow-hidden shadow-sm',
+        header: 'p-6 bg-gray-50 border-b border-gray-200',
+        headerTitle: 'text-lg font-semibold text-gray-900 mb-2',
+        headerSubtitle: 'text-gray-600 text-sm',
+        loadingText: 'text-gray-600',
+        errorText: 'text-red-600',
+        emptyText: 'text-gray-500',
+        divider: 'divide-y divide-gray-100',
+        itemContainer: 'flex items-center p-4 hover:bg-gray-50 transition-all duration-200',
+        rankText: 'text-lg font-semibold text-blue-600',
+        usernameText: 'text-gray-900 font-medium',
+        subtitleText: 'text-gray-500 text-sm',
+        valueText: 'text-blue-600 text-lg font-semibold mb-1'
+      };
+    } else {
+      return {
+        container: 'bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 overflow-hidden',
+        header: 'p-6 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border-b border-white/10',
+        headerTitle: 'text-lg font-semibold text-white mb-2',
+        headerSubtitle: 'text-white/70 text-sm',
+        loadingText: 'text-white/70',
+        errorText: 'text-red-400',
+        emptyText: 'text-white/70',
+        divider: 'divide-y divide-white/10',
+        itemContainer: 'flex items-center p-4 hover:bg-white/5 transition-all duration-200',
+        rankText: 'text-lg font-semibold text-blue-400',
+        usernameText: 'text-white font-medium',
+        subtitleText: 'text-white/60 text-sm',
+        valueText: 'text-blue-400 text-lg font-semibold mb-1'
+      };
+    }
+  };
+
+  const themeClasses = getThemeClasses();
   if (loading) {
     return (
       <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 overflow-hidden">

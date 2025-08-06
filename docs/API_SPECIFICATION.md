@@ -33,7 +33,8 @@
   "styling": "Tailwind CSS",
   "charts": "recharts",
   "icons": "lucide-react",
-  "routing": "React Router"
+  "routing": "React Router",
+  "state-management": "Zustand (導入予定)"
 }
 ```
 
@@ -44,7 +45,7 @@
 - JWT ベースのセッション管理
 - 基本的なDiscord Bot機能（voice_sessions管理）
 - サーバー管理者権限チェック
-- 基本的なWeb管理画面
+- **✅ 統計ダッシュボードWeb UI**（React Router SPA・完全動作）
 - Discord Bot制御API（メッセージ送信、チャンネル操作など）
 - **統一APIレスポンス形式**（`{data, meta, error?}`構造）
 - **3段階権限システム**（VIEW/MANAGE/EXECUTE）
@@ -52,13 +53,14 @@
 - **期間別統計計算の基盤**（週間・月間・年間統計）
 - **通知スケジュール管理テーブル**（notification_schedules等）
 - **構造化エラーハンドリング**（統一エラーコード・メッセージ）
-- **✅ NEW: 統計API実装完了**（ランキング・タイムライン・サマリー履歴）
-- **✅ NEW: Fastifyプラグインシステム**（response, permission, validation）
+- **✅ 統計API実装完了**（ランキング・タイムライン・サマリー履歴）
+- **✅ Fastifyプラグインシステム**（response, permission, validation）
+- **✅ フロントエンド統計ダッシュボード完全実装**（実データ表示確認済み）
 
 ### 🔄 拡張予定機能
 - 実際の通知システムロジック（自動通知送信・スケジューラー）
-- フロントエンド統計ダッシュボード
 - PWAプッシュ通知
+- **状態管理ライブラリ（Zustand）導入**（カスタムフック複雑化対策）
 
 ## API設計
 
@@ -984,16 +986,15 @@ npm run type-check
 
 ## フロントエンド実装状況
 
-### ✅ 実装完了項目（Phase 3.1）
+### ✅ Phase 3 完全実装済み
 
-#### API通信基盤
+#### Phase 3.1: API通信基盤（✅ 完了）
 - **統一APIクライアント**: `frontend/src/utils/api.ts`
   - 新API設計（v1エンドポイント）対応完了
   - 統一レスポンス形式 `APIResponse<T>` 処理
   - 構造化エラーハンドリング（`APIException`クラス）
   - 全統計API関数群実装済み
 
-#### Reactフック
 - **統計データフック**: `frontend/src/hooks/useStatistics.ts`
   - ランキング・タイムライン・サマリー取得機能
   - 自動更新・手動更新・差分更新対応
@@ -1005,39 +1006,66 @@ npm run type-check
   - 豊富なプリセット（今週・先週・今月・過去7日等）
   - 期間ナビゲーション・バリデーション・フォーマット
 
-#### ユーティリティ関数
-- **期間計算**: `frontend/src/utils/period.ts`
-  - 期間生成・相対期間移動・日数計算機能
-  - 週番号計算・期間バリデーション
+- **ユーティリティ関数**: `frontend/src/utils/period.ts`, `frontend/src/utils/date.ts`
+  - 期間計算・日付処理・フォーマット機能
+  - TypeScript型定義による完全な型安全性
 
-- **日付処理**: `frontend/src/utils/date.ts`
-  - 日本語形式・短縮形式フォーマット
-  - 時間長フォーマット（秒→時間分秒変換）
-  - 相対日付表示・詳細バリデーション
+#### Phase 3.2: 統計表示コンポーネント（✅ 完了）
+- **ランキング表示**: `frontend/src/components/statistics/RankingTableNormal.tsx`
+  - Normalテーマ対応・前期間比較機能
+  - レスポンシブ対応・Discord アバター表示
+  - 実データでの動作確認済み
 
-#### 型定義
-- **統計型定義**: `frontend/src/types/statistics.ts`
-  - 完全な型安全性を保証
-  - APIレスポンス・UI状態・フォーム用型定義
-  - バックエンドAPI型との完全一致
+- **統計コンポーネント**: `frontend/src/components/statistics/`
+  - RankingTable.tsx（Neonテーマ）
+  - Timeline.tsx（インタラクティブタイムライン）
+  - StatsSummary.tsx（統計サマリーカード）
 
-### 🔄 次期実装予定（Phase 3.2）
+#### Phase 3.3: 統計ダッシュボード画面（✅ 完了）
+- **React Router SPA構造**: `frontend/src/App.tsx`, `frontend/src/components/layout/`
+  - TabNavigation廃止→React Router移行
+  - URL反映・ブラウザバック対応・適切なSEO
+  - Layout コンポーネント・Sidebar ナビゲーション
 
-#### 統計表示コンポーネント
-- **ランキング表示**: `frontend/src/components/statistics/RankingTable.tsx`
-- **タイムライン表示**: `frontend/src/components/statistics/Timeline.tsx`
-- **統計サマリー**: `frontend/src/components/statistics/StatsSummary.tsx`
+- **統計ダッシュボード**: `frontend/src/pages/DashboardPage.tsx`
+  - ビュー切替（サマリー・ランキング・タイムライン）
+  - 期間選択・メトリクス選択・手動データ更新
+  - 実データでの完全動作確認済み
 
-#### 統計ダッシュボード画面
-- **メイン統計ページ**: `frontend/src/pages/StatisticsPage.tsx`
-- **タイムライン専用ページ**: `frontend/src/pages/TimelinePage.tsx`
-- **ナビゲーション統合**: 既存ダッシュボードとの連携
+- **データフロー問題解決**: useDiscordData重複呼び出し問題の完全修正
+  - サーバー選択→統計データ更新の完全な連携確認
 
-### 実装アーキテクチャ特徴
+#### Phase 3.4: コードクリーンアップ（✅ 完了）
+- **自動更新機能有効化**: コメントアウトされた機能の実装
+- **デバッグログ整理**: プロダクション品質のログレベル調整
+- **Normalテーマ統合**: 白背景・グレー系の統一されたデザイン
 
-1. **統一API設計対応**: バックエンドv1 APIと完全連携
-2. **エラーハンドリング**: 構造化エラーレスポンスの適切な処理
-3. **型安全性**: TypeScript型定義による完全な型チェック
-4. **パフォーマンス最適化**: 自動更新・差分更新・キャッシュ機能
-5. **再利用性**: ユーティリティ関数の適切な分離・共通化
-6. **UX重視**: 直感的な期間選択・データ管理UI
+### 🔄 次期実装予定
+
+#### 状態管理ライブラリ導入（推奨）
+- **Zustand導入**: カスタムフック複雑化・Props drilling解消
+- **中央集権化**: 認証・サーバー管理・統計・期間選択の統一管理
+- **開発効率向上**: Redux DevTools・デバッグ容易性・保守性向上
+
+### 現在のアーキテクチャ課題
+
+#### カスタムフック分散による問題
+- **状態分離**: useDiscordData重複インスタンス問題
+- **Props drilling**: App.tsx → Layout → DashboardPage の複雑な連携
+- **デバッグ困難**: 状態管理の分散による問題特定の困難さ
+
+#### Zustand導入による解決期待効果
+1. **中央集権化**: 全状態をストアで管理・デバッグ容易
+2. **Prop Drilling解消**: Layoutへのprops渡しが不要
+3. **パフォーマンス向上**: 必要な状態変更時のみ再レンダリング
+4. **型安全性**: TypeScriptとの統合・完全な型推論
+5. **Phase 4準備**: 通知システム実装時の基盤安定化
+
+### 実装成果まとめ
+
+**Phase 3 完全達成**:
+- React Router による適切なSPA構造実現
+- 統計ダッシュボードの完全動作（実データ表示確認済み）
+- データフロー問題の根本修正・状態管理の統一
+- プロダクション品質のコードベース確立
+- 次フェーズ（通知システム・状態管理改善）への基盤完了
