@@ -34,7 +34,7 @@
   "charts": "recharts",
   "icons": "lucide-react",
   "routing": "React Router",
-  "state-management": "Zustand (導入予定)"
+  "state-management": "Custom Hooks (Jotai導入予定)"
 }
 ```
 
@@ -57,10 +57,23 @@
 - **✅ Fastifyプラグインシステム**（response, permission, validation）
 - **✅ フロントエンド統計ダッシュボード完全実装**（実データ表示確認済み）
 
-### 🔄 拡張予定機能
-- 実際の通知システムロジック（自動通知送信・スケジューラー）
-- PWAプッシュ通知
-- **状態管理ライブラリ（Zustand）導入**（カスタムフック複雑化対策）
+### 🔄 Phase 4: 次期実装予定
+
+#### 通知システム実装（Priority: High）
+- **通知API実装**: スケジュール管理・テスト通知・設定管理API
+- **Discord通知機能**: 自動通知送信システム・Cron スケジューラー
+- **通知フォーマット**: Discord Embed形式での統計配信
+- **Web UI**: 通知設定画面・テスト送信機能
+
+#### 状態管理ライブラリ導入（Priority: Medium）
+- **Jotai導入**: カスタムフック複雑化・Props drilling解消
+- **Atomic State Management**: 認証・サーバー管理・統計・期間選択の統一管理
+- **開発効率向上**: DevTools・デバッグ容易性・保守性向上
+
+#### Phase 5: PWA・拡張機能（Priority: Low）
+- **PWAプッシュ通知**: Service Worker・Web Push API対応
+- **パフォーマンス最適化**: Redis導入・統計計算高速化
+- **ユーザー詳細統計**: 個人ページ・トレンド表示
 
 ## API設計
 
@@ -1054,10 +1067,10 @@ npm run type-check
 - **Props drilling**: App.tsx → Layout → DashboardPage の複雑な連携
 - **デバッグ困難**: 状態管理の分散による問題特定の困難さ
 
-#### Zustand導入による解決期待効果
-1. **中央集権化**: 全状態をストアで管理・デバッグ容易
+#### Jotai導入による解決期待効果
+1. **Atomic State Management**: 細粒度な状態管理・デバッグ容易
 2. **Prop Drilling解消**: Layoutへのprops渡しが不要
-3. **パフォーマンス向上**: 必要な状態変更時のみ再レンダリング
+3. **パフォーマンス向上**: 必要なatomのみ再レンダリング
 4. **型安全性**: TypeScriptとの統合・完全な型推論
 5. **Phase 4準備**: 通知システム実装時の基盤安定化
 
