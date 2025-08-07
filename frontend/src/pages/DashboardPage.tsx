@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStatistics } from '../hooks/useStatistics';
 import { usePeriodSelector } from '../hooks/usePeriodSelector';
-import RankingTableNormal from '../components/statistics/RankingTableNormal';
+import RankingTable from '../components/statistics/RankingTable';
 import type { MetricType } from '../types/statistics';
 
 interface DashboardPageProps {
@@ -34,7 +34,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
 
   const {
     rankings,
-    timeline,
+    // timeline,
     loading,
     error,
     refreshAllData,
@@ -262,7 +262,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
 
         {activeView === 'ranking' && (
           <div className="p-6">
-            <RankingTableNormal
+            <RankingTable
               data={rankings}
               metric={{
                 type: selectedMetric,
