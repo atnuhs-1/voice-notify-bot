@@ -60,12 +60,26 @@ Discord通知ボット + Webダッシュボードのモノレポ構成。バッ�
   3. `database` - Turso SQLiteデータベース接続とヘルパー
   4. `discord` - Discord.jsクライアントとボイス状態イベント処理
   5. `auth` - JWTベース認証
-  6. `commands` - Discordスラッシュコマンド
-  7. `keepalive` - ヘルスチェックエンドポイント
+  6. `response` - 統一APIレスポンス形式とエラーハンドリング
+  7. `permission` - 権限チェックシステム（VIEW/MANAGE/EXECUTE）
+  8. `commands` - Discordスラッシュコマンド
+  9. `keepalive` - ヘルスチェックエンドポイント
 - **routes/**: APIエンドポイント（Fastifyによる自動読み込み）
   - `api/auth/` - Discord OAuth認証
   - `api/control/` - Bot制御エンドポイント
+  - `api/v1/` - 新統一API設計（実装済み）
+    - `api/v1/guilds/{guildId}/statistics/rankings` - ランキング取得API
+    - `api/v1/guilds/{guildId}/statistics/timeline` - タイムライン取得API 
+    - `api/v1/guilds/{guildId}/statistics/summaries` - サマリー履歴取得API
   - `health/` - ヘルスチェックエンドポイント
+- **utils/**: ユーティリティ関数（実装済み）
+  - `statistics.ts` - 統計計算・ランキング生成・タイムライン処理
+  - `period.ts` - 期間計算・週次/月次/年次キー生成
+  - `validation.ts` - APIバリデーション・日付範囲チェック
+- **types/**: TypeScript型定義（実装済み）
+  - `api.ts` - 統一APIレスポンス形式・エラーコード・権限定義
+  - `database.ts` - データベーステーブル型定義
+  - `shared.ts` - 共通型定義
 
 ### フロントエンド構造 (React SPA)
 - **src/App.tsx**: テーマ切替機能付きメインアプリケーション（Normal/Neonモード）
@@ -84,13 +98,13 @@ Turso (SQLite) を使用し、以下のテーブル構成：
 - `notifications`: ボイスチャンネルとテキストチャンネルのマッピング
 - `voice_sessions`: ボイスチャンネル活動セッション追跡
 
-#### 統計・通知機能用テーブル（実装予定）
-- `user_voice_activities`: 個人の入退室詳細ログ
-- `period_user_stats`: 期間別集計統計（週/月/年）
-- `notification_schedules`: 通知スケジュール設定
-- `daily_activity_summaries`: 日次活動サマリー
-- `weekly_activity_summaries`: 週次活動サマリー
-- `monthly_activity_summaries`: 月次活動サマリー
+#### 統計・通知機能用テーブル（✅ 実装済み）
+- `user_voice_activities`: 個人の入退室詳細ログ（完全動作）
+- `period_user_stats`: 期間別集計統計（週/月/年）（完全動作）
+- `notification_schedules`: 通知スケジュール設定（実装済み・API未実装）
+- `daily_activity_summaries`: 日次活動サマリー（実装済み・自動生成未実装）
+- `weekly_activity_summaries`: 週次活動サマリー（実装済み・自動生成未実装）
+- `monthly_activity_summaries`: 月次活動サマリー（実装済み・自動生成未実装）
 
 ### Discord Bot機能
 - ボイスチャンネル参加/退出通知（リッチEmbed）
@@ -143,11 +157,12 @@ VAPID_SUBJECT=mailto:your-email@example.com
 - バックエンドは依存関係の順序を保証するために手動プラグイン登録を使用（自動読み込みではない）
 - 各プラグインは前のプラグインに依存する可能性があるため、厳密な順序が必要
 
-### Discord Bot処理
+### Discord Bot処理（✅ 実装済み）
 - ボイス状態変更を監視し、リッチEmbedで通知を送信
-- セッション管理とユーザー活動追跡
-- 個人の入退室記録を `user_voice_activities` テーブルに記録
-- 期間別統計を `period_user_stats` テーブルでリアルタイム更新
+- セッション管理とユーザー活動追跡（完全動作）
+- 個人の入退室記録を `user_voice_activities` テーブルに記録（完全動作）
+- 期間別統計を `period_user_stats` テーブルでリアルタイム更新（完全動作）
+- 週次・月次・年次の統計自動計算システム（完全動作）
 
 ### 認証フロー
 1. `/api/auth/discord` でDiscord OAuth2開始
@@ -179,16 +194,17 @@ VAPID_SUBJECT=mailto:your-email@example.com
 @docs/IMPLEMENTATION.md を参照してください
 
 ### 統計機能
-- ボイスチャンネル滞在時間ランキング
-- セッション開始者の追跡
-- 期間別比較機能（週間、月間）
-- タイムライン表示
+- ✅ ボイスチャンネル滞在時間ランキング（実装済み・Web UI対応）
+- ✅ セッション開始者の追跡（実装済み）
+- ✅ 期間別比較機能（週間、月間）（実装済み・前期間比較対応）
+- 🔄 タイムライン表示（バックエンドAPI実装済み・フロントエンド未実装）
+- ✅ 統計API（v1エンドポイント完全実装）
 
-### 通知システム
-- 日次/週次/月次の自動サマリー通知
-- Discord Embed形式での統計配信
-- カスタム通知時間設定
-- PWAプッシュ通知（将来）
+### 通知システム（🔄 部分実装）
+- 📅 日次/週次/月次の自動サマリー通知（データベース実装済み・スケジューラー未実装）
+- 📧 Discord Embed形式での統計配信（未実装）
+- ⏰ カスタム通知時間設定（データベース実装済み・API未実装）
+- 📱 PWAプッシュ通知（将来実装予定）
 
 ### その他
 - 参加アンケート機能（定期実行または手動）
