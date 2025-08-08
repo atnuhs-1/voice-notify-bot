@@ -2,7 +2,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { 
-  authUserAtom, 
   authLoadingAtom, 
   authErrorAtom, 
   isAuthenticatedAtom,
@@ -13,7 +12,6 @@ import {
 } from './atoms/auth'
 import LoginScreen from './components/LoginScreen'
 import ErrorDisplay from './components/ErrorDisplay'
-import LoadingScreen from './components/LoadingScreen'
 import Layout from './components/layout/Layout'
 import DashboardPage from './pages/DashboardPage'
 import ChannelsPage from './pages/ChannelsPage'

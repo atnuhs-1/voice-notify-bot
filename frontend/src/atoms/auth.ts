@@ -58,7 +58,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000
 // ログイン（Discord OAuth2開始）
 export const loginActionAtom = atom(
   null,
-  (get, set) => {
+  (_get, set) => {
     set(authErrorAtom, null)
     console.log('🔄 Discord OAuth2認証を開始...')
     window.location.href = `${API_BASE_URL}/api/auth/discord`
@@ -102,7 +102,7 @@ export const logoutActionAtom = atom(
 // エラークリア
 export const clearAuthErrorActionAtom = atom(
   null,
-  (get, set) => {
+  (_get, set) => {
     set(authErrorAtom, null)
   }
 )
@@ -110,7 +110,7 @@ export const clearAuthErrorActionAtom = atom(
 // トークンから認証情報を設定
 export const setAuthFromTokenActionAtom = atom(
   null,
-  async (get, set, authToken: string): Promise<boolean> => {
+  async (_get, set, authToken: string): Promise<boolean> => {
     try {
       set(authLoadingAtom, true)
       set(authErrorAtom, null)

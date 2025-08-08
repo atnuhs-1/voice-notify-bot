@@ -1,12 +1,12 @@
 import type { 
   APIResponse, 
-  APIError, 
   RankingQuery, 
   TimelineQuery, 
   SummariesQuery 
 } from '../types/statistics';
 import { getDefaultStore } from 'jotai'
 import { authErrorAtom, authTokenAtom, authUserAtom, userGuildsAtom } from '../atoms/auth'
+import type { GuildsResponse } from '../types/discord';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
 
@@ -104,7 +104,7 @@ const apiCall = async <T = any>(endpoint: string, options: ApiCallOptions = {}):
 };
 
 // データ取得API（トークン引数対応）
-export const fetchGuilds = () => apiCall('/api/guilds?includeChannels=true');
+export const fetchGuilds = () => apiCall<GuildsResponse>('/api/guilds?includeChannels=true');
 export const fetchStats = () => apiCall('/api/stats');
 
 // メッセージ送信API

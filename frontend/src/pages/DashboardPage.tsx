@@ -1,16 +1,15 @@
 import React, { useState, Suspense } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { 
-  selectedGuildIdAtom, 
   selectedGuildAtom, 
   showResultActionAtom 
 } from '../atoms/discord';
 import {
   currentRankingDataAtom,
-  currentTimelineDataAtom,
+  // currentTimelineDataAtom,
   selectedPeriodAtom,
   selectedMetricAtom,
-  updatePeriodActionAtom,
+  // updatePeriodActionAtom,
   updateMetricActionAtom,
   refreshStatisticsActionAtom
 } from '../atoms/statistics';
@@ -28,7 +27,6 @@ const DashboardPage: React.FC = () => {
   const [activeView, setActiveView] = useState<'summary' | 'ranking' | 'timeline'>('summary');
   
   // Jotai atoms
-  const selectedGuild = useAtomValue(selectedGuildIdAtom);
   const selectedGuildData = useAtomValue(selectedGuildAtom);
   const selectedPeriod = useAtomValue(selectedPeriodAtom);
   const selectedMetric = useAtomValue(selectedMetricAtom);

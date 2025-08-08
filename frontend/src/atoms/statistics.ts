@@ -4,9 +4,9 @@ import { authTokenAtom, isAuthenticatedAtom } from './auth'
 import { selectedGuildIdAtom } from './discord'
 import { fetchRankings, fetchTimeline, fetchSummaries } from '../utils/api'
 import type { 
-  RankingData, 
-  TimelineData, 
-  SummariesData, 
+  // RankingData, 
+  // TimelineData, 
+  // SummariesData, 
   MetricType,
   PeriodSelection 
 } from '../types/statistics'
@@ -157,7 +157,7 @@ export const currentSummariesDataAtom = atom((get) => {
 // 期間更新アクション
 export const updatePeriodActionAtom = atom(
   null,
-  (get, set, newPeriod: PeriodSelection) => {
+  (_get, set, newPeriod: PeriodSelection) => {
     set(selectedPeriodAtom, newPeriod)
     console.log('🔄 期間を更新:', newPeriod)
     // 依存する統計データatomが自動で再取得される！
@@ -167,7 +167,7 @@ export const updatePeriodActionAtom = atom(
 // メトリクス更新アクション
 export const updateMetricActionAtom = atom(
   null,
-  (get, set, newMetric: MetricType) => {
+  (_get, set, newMetric: MetricType) => {
     set(selectedMetricAtom, newMetric)
     console.log('🔄 メトリクスを更新:', newMetric)
     // 依存する統計データatomが自動で再取得される！
@@ -191,8 +191,8 @@ export const refreshStatisticsActionAtom = atom(
       
       // atomFamily のキャッシュをクリアして再取得
       // 現在の選択状態で再取得される
-      const selectedPeriod = get(selectedPeriodAtom)
-      const selectedMetric = get(selectedMetricAtom)
+      // const selectedPeriod = get(selectedPeriodAtom)
+      // const selectedMetric = get(selectedMetricAtom)
       
       // キーを更新することで自動的に再取得される
       console.log(`🔄 統計データを手動更新: ${selectedGuildId}`)

@@ -99,7 +99,7 @@ export const selectGuildActionAtom = atom(
 // 結果メッセージ表示
 export const showResultActionAtom = atom(
   null,
-  (get, set, message: string, type: 'success' | 'error') => {
+  (_get, set, message: string, type: 'success' | 'error') => {
     set(discordResultAtom, { message, type })
     
     // 5秒後に自動でクリア
@@ -112,7 +112,7 @@ export const showResultActionAtom = atom(
 // 結果メッセージクリア
 export const clearResultActionAtom = atom(
   null,
-  (get, set) => {
+  (_get, set) => {
     set(discordResultAtom, null)
   }
 )
