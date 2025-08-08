@@ -111,6 +111,11 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
     await initializeTables(client, fastify.log);
     fastify.log.info('✅ Database tables initialized');
 
+    setImmediate(() => {
+      createIndexes(client, fastify.log)
+        .catch(e => fastify.log.error({ err: e }, '❌ Background index creation error'))
+    })
+
   } catch (error) {
     fastify.log.error('❌ Failed to connect to Turso database:', error);
     throw error;
@@ -745,204 +750,212 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
   });
 };
 
+const ENABLE_SCHEMA_PROFILING = process.env.DB_SCHEMA_PROFILING === '1'
+
+async function timed(logger: any, label: string, fn: () => Promise<any>) {
+  if (!ENABLE_SCHEMA_PROFILING) {
+    return fn()
+  }
+  const start = Date.now()
+  logger.info({ step: label }, `⏳ start: ${label}`)
+  try {
+    const r = await fn()
+    logger.info({ step: label, ms: Date.now() - start }, `✅ done: ${label}`)
+    return r
+  } catch (e) {
+    logger.error({ step: label, ms: Date.now() - start, err: e }, `❌ fail: ${label}`)
+    throw e
+  }
+}
+
 // テーブル初期化関数
 async function initializeTables(client: Client, logger: any) {
-  // Notifications テーブル
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS notifications (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      voiceChannelId TEXT NOT NULL,
-      textChannelId TEXT NOT NULL,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  const started = Date.now()
 
-  // VoiceSessions テーブル
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS voice_sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      channelId TEXT NOT NULL,
-      startTime DATETIME NOT NULL,
-      endTime DATETIME,
-      isActive BOOLEAN DEFAULT true,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+  // label, SQL のタプル配列
+  const tables: Array<[string, string]> = [
+    ['notifications', `
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        voiceChannelId TEXT NOT NULL,
+        textChannelId TEXT NOT NULL,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `],
+    ['voice_sessions', `
+      CREATE TABLE IF NOT EXISTS voice_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        channelId TEXT NOT NULL,
+        startTime DATETIME NOT NULL,
+        endTime DATETIME,
+        isActive BOOLEAN DEFAULT true,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `],
+    ['user_voice_activities', `
+      CREATE TABLE IF NOT EXISTS user_voice_activities (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        username TEXT NOT NULL,
+        channelId TEXT NOT NULL,
+        sessionId INTEGER NOT NULL,
+        joinTime DATETIME NOT NULL,
+        leaveTime DATETIME,
+        duration INTEGER,
+        isSessionStarter BOOLEAN DEFAULT false,
+        isActive BOOLEAN DEFAULT true,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (sessionId) REFERENCES voice_sessions(id)
+      )
+    `],
+    ['period_user_stats', `
+      CREATE TABLE IF NOT EXISTS period_user_stats (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        userId TEXT NOT NULL,
+        username TEXT NOT NULL,
+        periodType TEXT NOT NULL,
+        periodKey TEXT NOT NULL,
+        totalDuration INTEGER DEFAULT 0,
+        sessionCount INTEGER DEFAULT 0,
+        startedSessionCount INTEGER DEFAULT 0,
+        longestSession INTEGER DEFAULT 0,
+        averageSession INTEGER DEFAULT 0,
+        lastActivityId INTEGER,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(guildId, userId, periodType, periodKey)
+      )
+    `],
+    ['notification_schedules', `
+      CREATE TABLE IF NOT EXISTS notification_schedules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        scheduleType TEXT NOT NULL,
+        isEnabled BOOLEAN DEFAULT true,
+        dailyNotificationTime TEXT,
+        dailyActivityPeriodStart TEXT,
+        dailyActivityPeriodEnd TEXT,
+        weeklyNotificationDay INTEGER,
+        weeklyNotificationTime TEXT,
+        monthlyNotificationDay INTEGER,
+        monthlyNotificationTime TEXT,
+        targetChannelId TEXT NOT NULL,
+        timezone TEXT DEFAULT 'Asia/Tokyo',
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(guildId, scheduleType, targetChannelId)
+      )
+    `],
+    ['daily_activity_summaries', `
+      CREATE TABLE IF NOT EXISTS daily_activity_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        activityDate DATE NOT NULL,
+        periodStart DATETIME NOT NULL,
+        periodEnd DATETIME NOT NULL,
+        totalDuration INTEGER DEFAULT 0,
+        totalParticipants INTEGER DEFAULT 0,
+        totalSessions INTEGER DEFAULT 0,
+        longestSession INTEGER DEFAULT 0,
+        topUserId TEXT,
+        topUsername TEXT,
+        topUserDuration INTEGER DEFAULT 0,
+        isNotified BOOLEAN DEFAULT false,
+        notifiedAt DATETIME,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(guildId, activityDate)
+      )
+    `],
+    ['weekly_activity_summaries', `
+      CREATE TABLE IF NOT EXISTS weekly_activity_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        weekKey TEXT NOT NULL,
+        weekStart DATE NOT NULL,
+        weekEnd DATE NOT NULL,
+        totalDuration INTEGER DEFAULT 0,
+        totalParticipants INTEGER DEFAULT 0,
+        totalSessions INTEGER DEFAULT 0,
+        averageDailyDuration INTEGER DEFAULT 0,
+        topUserId TEXT,
+        topUsername TEXT,
+        topUserDuration INTEGER DEFAULT 0,
+        isNotified BOOLEAN DEFAULT false,
+        notifiedAt DATETIME,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(guildId, weekKey)
+      )
+    `],
+    ['monthly_activity_summaries', `
+      CREATE TABLE IF NOT EXISTS monthly_activity_summaries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        guildId TEXT NOT NULL,
+        monthKey TEXT NOT NULL,
+        monthStart DATE NOT NULL,
+        monthEnd DATE NOT NULL,
+        totalDuration INTEGER DEFAULT 0,
+        totalParticipants INTEGER DEFAULT 0,
+        totalSessions INTEGER DEFAULT 0,
+        averageDailyDuration INTEGER DEFAULT 0,
+        mostActiveDayDate DATE,
+        mostActiveDayDuration INTEGER DEFAULT 0,
+        topUserId TEXT,
+        topUsername TEXT,
+        topUserDuration INTEGER DEFAULT 0,
+        isNotified BOOLEAN DEFAULT false,
+        notifiedAt DATETIME,
+        createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(guildId, monthKey)
+      )
+    `],
+  ]
 
-  // user_voice_activities テーブル（個人の入退室ログ）
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS user_voice_activities (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      userId TEXT NOT NULL,
-      username TEXT NOT NULL,
-      channelId TEXT NOT NULL,
-      sessionId INTEGER NOT NULL,
-      joinTime DATETIME NOT NULL,
-      leaveTime DATETIME,
-      duration INTEGER,
-      isSessionStarter BOOLEAN DEFAULT false,
-      isActive BOOLEAN DEFAULT true,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (sessionId) REFERENCES voice_sessions(id)
-    )
-  `);
+  for (const [label, sql] of tables) {
+    await timed(logger, `table:${label}`, () => client.execute(sql))
+  }
 
-  // period_user_stats テーブル（期間別集計統計）
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS period_user_stats (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      userId TEXT NOT NULL,
-      username TEXT NOT NULL,
-      periodType TEXT NOT NULL,
-      periodKey TEXT NOT NULL,
-      totalDuration INTEGER DEFAULT 0,
-      sessionCount INTEGER DEFAULT 0,
-      startedSessionCount INTEGER DEFAULT 0,
-      longestSession INTEGER DEFAULT 0,
-      averageSession INTEGER DEFAULT 0,
-      lastActivityId INTEGER,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(guildId, userId, periodType, periodKey)
-    )
-  `);
+  logger.info({
+    tables: tables.length,
+    totalMs: Date.now() - started,
+    profiling: ENABLE_SCHEMA_PROFILING
+  }, '✅ Tables verified')
+}
 
-  // notification_schedules テーブル（通知設定管理）
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS notification_schedules (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      scheduleType TEXT NOT NULL,
-      isEnabled BOOLEAN DEFAULT true,
-      dailyNotificationTime TEXT,
-      dailyActivityPeriodStart TEXT,
-      dailyActivityPeriodEnd TEXT,
-      weeklyNotificationDay INTEGER,
-      weeklyNotificationTime TEXT,
-      monthlyNotificationDay INTEGER,
-      monthlyNotificationTime TEXT,
-      targetChannelId TEXT NOT NULL,
-      timezone TEXT DEFAULT 'Asia/Tokyo',
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(guildId, scheduleType, targetChannelId)
-    )
-  `);
+async function createIndexes(client: Client, logger: any) {
+  const tasks = [
+    ['idx_notifications_guild_text', `CREATE INDEX IF NOT EXISTS idx_notifications_guild_text ON notifications(guildId, textChannelId)`],
+    ['idx_voice_sessions_active', `CREATE INDEX IF NOT EXISTS idx_voice_sessions_active ON voice_sessions(guildId, channelId, isActive)`],
+    ['idx_user_activities_ranking', `CREATE INDEX IF NOT EXISTS idx_user_activities_ranking ON user_voice_activities(guildId, userId, joinTime)`],
+    ['idx_user_activities_session', `CREATE INDEX IF NOT EXISTS idx_user_activities_session ON user_voice_activities(sessionId, isActive)`],
+    ['idx_user_activities_timeline', `CREATE INDEX IF NOT EXISTS idx_user_activities_timeline ON user_voice_activities(guildId, joinTime, leaveTime)`],
+    ['idx_period_stats_ranking', `CREATE INDEX IF NOT EXISTS idx_period_stats_ranking ON period_user_stats(guildId, periodType, periodKey, totalDuration DESC)`],
+    ['idx_notification_schedules_check', `CREATE INDEX IF NOT EXISTS idx_notification_schedules_check ON notification_schedules(scheduleType, isEnabled, dailyNotificationTime)`],
+    ['idx_daily_summaries_notification', `CREATE INDEX IF NOT EXISTS idx_daily_summaries_notification ON daily_activity_summaries(guildId, activityDate, isNotified)`],
+  ] as const
 
-  // daily_activity_summaries テーブル（日次活動サマリー）
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS daily_activity_summaries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      activityDate DATE NOT NULL,
-      periodStart DATETIME NOT NULL,
-      periodEnd DATETIME NOT NULL,
-      totalDuration INTEGER DEFAULT 0,
-      totalParticipants INTEGER DEFAULT 0,
-      totalSessions INTEGER DEFAULT 0,
-      longestSession INTEGER DEFAULT 0,
-      topUserId TEXT,
-      topUsername TEXT,
-      topUserDuration INTEGER DEFAULT 0,
-      isNotified BOOLEAN DEFAULT false,
-      notifiedAt DATETIME,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(guildId, activityDate)
-    )
-  `);
+  if (ENABLE_SCHEMA_PROFILING) {
+    logger.info('⏳ Starting background index creation (detailed)...')
+  } else {
+    logger.info('⏳ Starting background index creation...')
+  }
 
-  // weekly_activity_summaries テーブル（週次活動サマリー）
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS weekly_activity_summaries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      weekKey TEXT NOT NULL,
-      weekStart DATE NOT NULL,
-      weekEnd DATE NOT NULL,
-      totalDuration INTEGER DEFAULT 0,
-      totalParticipants INTEGER DEFAULT 0,
-      totalSessions INTEGER DEFAULT 0,
-      averageDailyDuration INTEGER DEFAULT 0,
-      topUserId TEXT,
-      topUsername TEXT,
-      topUserDuration INTEGER DEFAULT 0,
-      isNotified BOOLEAN DEFAULT false,
-      notifiedAt DATETIME,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(guildId, weekKey)
-    )
-  `);
+  const startAll = Date.now()
+  await Promise.all(tasks.map(async ([label, sql]) => {
+    const t0 = Date.now()
+    try {
+      await client.execute(sql)
+      if (ENABLE_SCHEMA_PROFILING) {
+        logger.info({ index: label, ms: Date.now() - t0 }, `✅ index created: ${label}`)
+      }
+    } catch (e) {
+      logger.error({ index: label, ms: Date.now() - t0, err: e }, `❌ index failed: ${label}`)
+    }
+  }))
 
-  // monthly_activity_summaries テーブル（月次活動サマリー）
-  await client.execute(`
-    CREATE TABLE IF NOT EXISTS monthly_activity_summaries (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      guildId TEXT NOT NULL,
-      monthKey TEXT NOT NULL,
-      monthStart DATE NOT NULL,
-      monthEnd DATE NOT NULL,
-      totalDuration INTEGER DEFAULT 0,
-      totalParticipants INTEGER DEFAULT 0,
-      totalSessions INTEGER DEFAULT 0,
-      averageDailyDuration INTEGER DEFAULT 0,
-      mostActiveDayDate DATE,
-      mostActiveDayDuration INTEGER DEFAULT 0,
-      topUserId TEXT,
-      topUsername TEXT,
-      topUserDuration INTEGER DEFAULT 0,
-      isNotified BOOLEAN DEFAULT false,
-      notifiedAt DATETIME,
-      createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(guildId, monthKey)
-    )
-  `);
-
-  // インデックス作成（パフォーマンス向上）
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_notifications_guild_text 
-    ON notifications(guildId, textChannelId)
-  `);
-
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_voice_sessions_active 
-    ON voice_sessions(guildId, channelId, isActive)
-  `);
-
-  // 新規テーブル用インデックス
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_user_activities_ranking 
-    ON user_voice_activities(guildId, userId, joinTime)
-  `);
-
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_user_activities_session 
-    ON user_voice_activities(sessionId, isActive)
-  `);
-
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_user_activities_timeline 
-    ON user_voice_activities(guildId, joinTime, leaveTime)
-  `);
-
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_period_stats_ranking 
-    ON period_user_stats(guildId, periodType, periodKey, totalDuration DESC)
-  `);
-
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_notification_schedules_check 
-    ON notification_schedules(scheduleType, isEnabled, dailyNotificationTime)
-  `);
-
-  await client.execute(`
-    CREATE INDEX IF NOT EXISTS idx_daily_summaries_notification 
-    ON daily_activity_summaries(guildId, activityDate, isNotified)
-  `);
-
-  logger.info('✅ Database tables and indexes created/verified');
+  logger.info({ totalMs: Date.now() - startAll, profiling: ENABLE_SCHEMA_PROFILING }, '✅ All background indexes processed')
 }
 
 export default fp(databasePlugin, {

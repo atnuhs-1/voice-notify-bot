@@ -2,6 +2,9 @@ import { FastifyPluginAsync } from 'fastify'
 
 const apiRoutes: FastifyPluginAsync = async (fastify, opts): Promise<void> => {
   
+  // NOTE: AutoLoadが有効なため、v1ディレクトリは自動的に /v1 プレフィックスで読み込まれます
+  // 手動でregisterする必要はありません
+  
   // 統計情報API（認証必須）
   fastify.get('/stats', { preHandler: [fastify.authenticate] }, async function (request, reply) {
     const discordBot = fastify.discord

@@ -5,18 +5,60 @@ import app from './app'
 // 環境変数読み込み
 config()
 
+let reqSeq = 0
+const SLOW_WARN_MS = Number(process.env.SLOW_WARN_MS || 2000)
+
+// プラグインタイムアウト（ms）
+const pluginTimeout = Number(process.env.PLUGIN_TIMEOUT_MS || '30000')
+
 // Fastifyインスタンス作成
 const server: FastifyInstance = Fastify({
   logger: {
+    level: process.env.LOG_LEVEL || 'info',
     transport: {
       target: 'pino-pretty',
       options: {
         colorize: true,
-        translateTime: 'HH:MM:ss Z',
+        translateTime: 'HH:MM:ss',
         ignore: 'pid,hostname'
       }
+    },
+    redact: ['req.headers.authorization'],
+    serializers: {
+      req(req) {
+        return { id: req.id, method: req.method, url: req.url }
+      },
+      res(res) {
+        return { statusCode: res.statusCode }
+      }
     }
-  }
+  },
+  disableRequestLogging: true, // 標準の "incoming request"/"request completed" を無効化
+  genReqId() {
+    return `req-${(++reqSeq).toString(36)}`
+  },
+  pluginTimeout,
+})
+server.log.info({ pluginTimeout }, 'Plugin timeout configured')
+
+// 1行サマリ用フック
+server.addHook('onResponse', (req, reply, done) => {
+  if (req.method === 'OPTIONS') return done()
+  const ms = reply.elapsedTime ?? 0
+  let level: 'info' | 'warn' | 'error' = 'info'
+  if (reply.statusCode >= 500) level = 'error'
+  else if (ms > SLOW_WARN_MS) level = 'warn'
+  ;(req.log as any)[level](
+    {
+      reqId: req.id,
+      method: req.method,
+      url: req.url,
+      status: reply.statusCode,
+      ms: +ms.toFixed(1),
+    },
+    `${req.method} ${req.url} ${reply.statusCode} ${ms.toFixed(1)}ms`
+  )
+  done()
 })
 
 // 詳細なエラー情報を表示する関数

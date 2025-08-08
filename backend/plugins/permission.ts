@@ -13,6 +13,7 @@ declare module 'fastify' {
     requirePermission: (level: PermissionLevel) => preHandlerHookHandler;
     checkUserPermission: (userId: string, guildId: string, level: PermissionLevel) => Promise<boolean>;
     getUserPermissionLevel: (userId: string, guildId: string) => Promise<PermissionLevel>;
+    checkGuildAccess: (userId: string, guildId: string) => Promise<boolean>;
   }
 
   // Fastify Reply型拡張
@@ -146,10 +147,30 @@ const permissionPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) =>
     };
   };
 
+  // ギルドアクセス権限をチェック（最低レベルでもアクセス可能かどうか）
+  const checkGuildAccess = async (userId: string, guildId: string): Promise<boolean> => {
+    try {
+      // Discord Botクライアントからギルド情報を取得
+      const guild = fastify.discord.guilds.cache.get(guildId);
+      if (!guild) {
+        return false; // Botがサーバーにいない
+      }
+
+      // メンバー情報を取得
+      const member = await guild.members.fetch(userId).catch(() => null);
+      return member !== null; // メンバーであればアクセス可能
+
+    } catch (error) {
+      fastify.log.error(`Guild access check failed for user ${userId} in guild ${guildId}:`, error);
+      return false;
+    }
+  };
+
   // Fastifyインスタンスにデコレート
   fastify.decorate('requirePermission', requirePermission);
   fastify.decorate('checkUserPermission', checkUserPermission);
   fastify.decorate('getUserPermissionLevel', getUserPermissionLevel);
+  fastify.decorate('checkGuildAccess', checkGuildAccess);
 
   // レスポンスに権限情報を追加するヘルパー
   fastify.decorateReply('withPermissions', async function (

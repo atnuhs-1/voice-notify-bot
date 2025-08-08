@@ -842,7 +842,7 @@ push_subscriptions: 最大100ユーザー = 100レコード (約20KB)
    - 統計ダッシュボード画面（APIエンドポイント準備完了）
    - タイムライン表示機能（データ構造準備完了）
 
-### ✅ Phase 2.1-2.3: API基盤（完了）
+### ✅ Phase 2.1-2.4: API基盤・統計API（完了）
 1. **✅ 完了**: 統一APIレスポンス形式
    - `{data, meta, error?}` 構造実装済み
    - 構造化エラーハンドリング実装済み
@@ -852,6 +852,12 @@ push_subscriptions: 最大100ユーザー = 100レコード (約20KB)
 3. **✅ 完了**: 通知スケジュール管理テーブル
    - `notification_schedules` テーブル実装済み
    - 活動サマリーテーブル実装済み
+4. **✅ NEW 完了**: 統計API実装
+   - ランキングAPI (`GET /api/v1/guilds/{guildId}/statistics/rankings`)
+   - タイムラインAPI (`GET /api/v1/guilds/{guildId}/statistics/timeline`)
+   - サマリー履歴API (`GET /api/v1/guilds/{guildId}/statistics/summaries`)
+   - 統計計算ユーティリティ関数（period.ts, statistics.ts）
+   - バリデーション関数（validation.ts）
 
 ### 🔄 Phase 3: 通知システム実装（次期）
 1. **準備完了**: 通知API実装

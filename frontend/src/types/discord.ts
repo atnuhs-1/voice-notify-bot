@@ -4,17 +4,37 @@ export interface Channel {
   type: string;
 }
 
+export interface GuildUserPermissions {
+  isOwner: boolean;
+  permissions: string;
+}
+
 export interface Guild {
   id: string;
   name: string;
   memberCount: number;
   channels: number;
-  voiceChannelsCount: number;  // 数値用にリネーム
+  // APIには voiceChannelsCount が無いためオプショナルに変更
+  voiceChannelsCount?: number;
   owner: string;
   icon: string | null;
   joinedAt: string;
+  userPermissions: GuildUserPermissions; // 追加
   textChannels?: Channel[];
-  voiceChannels?: Channel[];   // 配列用
+  voiceChannels?: Channel[];
+}
+
+
+// ギルド一覧レスポンス
+export interface GuildsResponse {
+  guilds: Guild[];
+  total: number;
+  user: {
+    id: string;
+    username: string;
+    totalAdminGuilds: number;
+  };
+  timestamp: string;
 }
 
 export interface BotStats {
@@ -80,8 +100,6 @@ export interface TabProps {
   showResult: (message: string, type: 'success' | 'error') => void;
   loadData: () => void;
 }
-
-// 新しく追加する共通型定義
 
 /**
  * 通知設定の型定義

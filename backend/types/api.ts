@@ -50,7 +50,7 @@ export interface RankingItem {
   rank: number;
   userId: string;
   username: string;
-  avatar?: string;
+  avatar?: string | null;
   value: number; // メトリクスの値
   sessionCount: number;
   longestSession: number;
@@ -60,7 +60,7 @@ export interface RankingItem {
 export interface RankingComparison {
   previousValue: number;
   change: number;
-  changePercentage: number;
+  changePercentage: number | null;
   rankChange: number | null;
   isNew: boolean;
 }
@@ -93,7 +93,7 @@ export interface TimelineQuery {
 export interface TimelineActivity {
   userId: string;
   username: string;
-  avatar?: string;
+  avatar?: string | null;
   sessions: TimelineSession[];
 }
 
