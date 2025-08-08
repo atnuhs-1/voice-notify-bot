@@ -1,7 +1,9 @@
-import { useAuth } from '../hooks/useAuth'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { authLoadingAtom, loginActionAtom } from '../atoms/auth'
 
 export default function LoginScreen() {
-  const { login, isLoading } = useAuth()
+  const isLoading = useAtomValue(authLoadingAtom)
+  const login = useSetAtom(loginActionAtom)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center p-4">

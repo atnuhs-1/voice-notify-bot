@@ -1,51 +1,52 @@
-import React, { useState, useEffect } from 'react';
-import { useStatistics } from '../hooks/useStatistics';
-import { usePeriodSelector } from '../hooks/usePeriodSelector';
+import React, { useState, Suspense } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { 
+  selectedGuildIdAtom, 
+  selectedGuildAtom, 
+  showResultActionAtom 
+} from '../atoms/discord';
+import {
+  currentRankingDataAtom,
+  currentTimelineDataAtom,
+  selectedPeriodAtom,
+  selectedMetricAtom,
+  updatePeriodActionAtom,
+  updateMetricActionAtom,
+  refreshStatisticsActionAtom
+} from '../atoms/statistics';
+import {
+  periodPresetsAtom,
+  formattedPeriodAtom,
+  selectPresetActionAtom,
+  navigatePreviousActionAtom,
+  navigateNextActionAtom
+} from '../atoms/period';
 import RankingTable from '../components/statistics/RankingTable';
 import type { MetricType } from '../types/statistics';
 
-interface DashboardPageProps {
-  selectedGuild: string;
-  selectedGuildData: any;
-  showResult: (message: string, type: 'success' | 'error') => void;
-}
-
-const DashboardPage: React.FC<DashboardPageProps> = ({
-  selectedGuild,
-  selectedGuildData,
-  showResult
-}) => {
+const DashboardPage: React.FC = () => {
   const [activeView, setActiveView] = useState<'summary' | 'ranking' | 'timeline'>('summary');
-  const [selectedMetric, setSelectedMetric] = useState<MetricType>('duration');
   
-  const {
-    selectedPeriod,
-    presets,
-    selectPreset,
-    navigatePeriod,
-    formatPeriod
-  } = usePeriodSelector();
-
-  // selectedGuild変更時の処理
-  useEffect(() => {
-    // データが変更されたら必要に応じて処理を実行
-    // console.log('DashboardPage: selectedGuild changed to', selectedGuild);
-  }, [selectedGuild, selectedGuildData]);
-
-  const {
-    rankings,
-    // timeline,
-    loading,
-    error,
-    refreshAllData,
-    updatePeriod,
-    updateMetric
-  } = useStatistics(selectedGuild);
+  // Jotai atoms
+  const selectedGuild = useAtomValue(selectedGuildIdAtom);
+  const selectedGuildData = useAtomValue(selectedGuildAtom);
+  const selectedPeriod = useAtomValue(selectedPeriodAtom);
+  const selectedMetric = useAtomValue(selectedMetricAtom);
+  const formattedPeriod = useAtomValue(formattedPeriodAtom);
+  const presets = useAtomValue(periodPresetsAtom);
+  
+  // Actions
+  const showResult = useSetAtom(showResultActionAtom);
+  const updateMetric = useSetAtom(updateMetricActionAtom);
+  const selectPreset = useSetAtom(selectPresetActionAtom);
+  const navigatePrevious = useSetAtom(navigatePreviousActionAtom);
+  const navigateNext = useSetAtom(navigateNextActionAtom);
+  const refreshStatistics = useSetAtom(refreshStatisticsActionAtom);
 
   // 手動更新ハンドラー
   const handleRefresh = async () => {
     try {
-      await refreshAllData();
+      await refreshStatistics();
       showResult('統計データを更新しました', 'success');
     } catch (error) {
       console.error('統計データ更新エラー:', error);
@@ -54,22 +55,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
   };
 
   // 期間変更ハンドラー
-  const handlePeriodChange = (presetIndex: number) => {
-    const preset = presets[presetIndex];
-    if (preset) {
-      selectPreset(preset);
-      updatePeriod(preset.value);
-    }
+  const handlePeriodChange = (presetKey: string) => {
+    selectPreset(presetKey);
   };
 
   // メトリクス変更ハンドラー
   const handleMetricChange = (metric: MetricType) => {
-    setSelectedMetric(metric);
-    updateMetric({
-      type: metric,
-      label: metric === 'duration' ? '滞在時間' : metric === 'sessions' ? 'セッション数' : '開始セッション',
-      unit: metric === 'duration' ? '時間' : '回'
-    });
+    updateMetric(metric);
   };
 
   // ビューオプション
@@ -102,11 +94,10 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
           
           <button
             onClick={handleRefresh}
-            disabled={loading}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 font-medium"
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 font-medium"
           >
-            <span className={loading ? 'animate-spin' : ''}>🔄</span>
-            {loading ? '更新中...' : 'データ更新'}
+            <span>🔄</span>
+            データ更新
           </button>
         </div>
       </div>
@@ -141,12 +132,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">📅 期間選択</h3>
             <div className="flex flex-wrap gap-2">
-              {presets.map((preset, index) => (
+              {presets.map((preset) => (
                 <button
-                  key={index}
-                  onClick={() => handlePeriodChange(index)}
+                  key={preset.key}
+                  onClick={() => handlePeriodChange(preset.key)}
                   className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedPeriod.from === preset.value.from && selectedPeriod.to === preset.value.to
+                    selectedPeriod.from === preset.period.from && selectedPeriod.to === preset.period.to
                       ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
                   }`}
@@ -159,7 +150,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
             {/* 期間ナビゲーション */}
             <div className="flex items-center gap-3 mt-4">
               <button
-                onClick={() => navigatePeriod('previous')}
+                onClick={navigatePrevious}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 title="前の期間"
               >
@@ -167,11 +158,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
               </button>
               <div className="text-center min-w-fit px-4 py-2 bg-gray-50 rounded-lg">
                 <div className="font-semibold text-gray-800">
-                  {formatPeriod(selectedPeriod)}
+                  {formattedPeriod}
                 </div>
               </div>
               <button
-                onClick={() => navigatePeriod('next')}
+                onClick={navigateNext}
                 className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 title="次の期間"
               >
@@ -224,19 +215,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
         </div>
       </div>
 
-      {/* エラー表示 */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚠️</span>
-            <div>
-              <h3 className="font-semibold text-red-800">エラーが発生しました</h3>
-              <p className="text-red-700 mt-1">{error}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* メインコンテンツ */}
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         {activeView === 'summary' && (
@@ -262,18 +240,16 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
 
         {activeView === 'ranking' && (
           <div className="p-6">
-            <RankingTable
-              data={rankings}
-              metric={{
-                type: selectedMetric,
-                label: selectedMetric === 'duration' ? '滞在時間' : selectedMetric === 'sessions' ? 'セッション数' : '開始セッション',
-                unit: selectedMetric === 'duration' ? '時間' : '回'
-              }}
-              loading={loading}
-              error={error}
-              showComparison={true}
-              limit={10}
-            />
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin text-4xl mb-4">🔄</div>
+                  <p className="text-gray-600">ランキングデータを読み込み中...</p>
+                </div>
+              </div>
+            }>
+              <RankingView />
+            </Suspense>
           </div>
         )}
 
@@ -317,6 +293,39 @@ const DashboardPage: React.FC<DashboardPageProps> = ({
         </div>
       </div>
     </div>
+  );
+};
+
+// Suspense対応のランキング表示コンポーネント
+const RankingView: React.FC = () => {
+  const rankings = useAtomValue(currentRankingDataAtom);
+  const selectedMetric = useAtomValue(selectedMetricAtom);
+
+  if (!rankings) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-6xl mb-4">🤖</div>
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">サーバーを選択してください</h3>
+        <p className="text-gray-500">
+          左のサイドバーからサーバーを選択して、統計データを表示しましょう
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <RankingTable
+      data={rankings}
+      metric={{
+        type: selectedMetric,
+        label: selectedMetric === 'duration' ? '滞在時間' : selectedMetric === 'sessions' ? 'セッション数' : '開始セッション',
+        unit: selectedMetric === 'duration' ? '時間' : '回'
+      }}
+      loading={false} // Suspenseが処理するのでfalse
+      error={null}    // Suspenseが処理するのでnull
+      showComparison={true}
+      limit={10}
+    />
   );
 };
 

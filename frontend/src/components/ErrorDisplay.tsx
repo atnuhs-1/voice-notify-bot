@@ -1,5 +1,5 @@
 import React from 'react';
-import { type AuthError } from '../hooks/useAuth';
+import { type AuthError } from '../atoms/auth';
 
 interface ErrorDisplayProps {
   error: AuthError;
