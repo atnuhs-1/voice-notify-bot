@@ -1,20 +1,21 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { 
+  guildsAtom, 
+  selectedGuildIdAtom, 
+  selectedGuildAtom, 
+  selectGuildActionAtom, 
+  guildsInitialLoadingAtom
+} from '../../atoms/discord';
 
-interface SidebarProps {
-  guilds: any[];
-  selectedGuild: string;
-  setSelectedGuild: (guildId: string) => void;
-  selectedGuildData: any;
-}
-
-const Sidebar: React.FC<SidebarProps> = ({
-  guilds,
-  selectedGuild,
-  setSelectedGuild,
-  selectedGuildData
-}) => {
+const Sidebar: React.FC = () => {
   const location = useLocation();
+  const guilds = useAtomValue(guildsAtom);
+  const selectedGuild = useAtomValue(selectedGuildIdAtom);
+  const selectedGuildData = useAtomValue(selectedGuildAtom);
+  const setSelectedGuild = useSetAtom(selectGuildActionAtom);
+  const initialLoading = useAtomValue(guildsInitialLoadingAtom)
 
   const navigation = [
     { 
@@ -69,36 +70,81 @@ const Sidebar: React.FC<SidebarProps> = ({
         <label className="block text-sm font-medium text-gray-700 mb-2">
           サーバー選択
         </label>
-        <select
-          value={selectedGuild || ''}
-          onChange={(e) => setSelectedGuild(e.target.value)}
-          className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="">サーバーを選択...</option>
-          {guilds.map(guild => (
-            <option key={guild.id} value={guild.id}>
-              {guild.name} ({guild.memberCount}人)
-            </option>
-          ))}
-        </select>
+        {initialLoading ? (
+          <select
+            disabled
+            value=""
+            className="w-full p-2 border border-gray-300 rounded-lg text-sm bg-gray-100 text-gray-500 cursor-wait"
+          >
+            <option>読み込み中...</option>
+          </select>
+        ) : (
+          <select
+            value={selectedGuild || ''}
+            onChange={(e) => setSelectedGuild(e.target.value)}
+            className="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            <option value="">{guilds.length ? 'サーバーを選択...' : '利用可能なサーバー無し'}</option>
+            {guilds.map(guild => (
+              <option key={guild.id} value={guild.id}>
+                {guild.name} ({guild.memberCount}人)
+              </option>
+            ))}
+          </select>
+        )}
         
-        {selectedGuildData && (
-          <div className="mt-2 p-2 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-2">
-              {selectedGuildData.icon && (
-                <img
-                  src={`https://cdn.discordapp.com/icons/${selectedGuildData.id}/${selectedGuildData.icon}.webp?size=32`}
-                  alt={selectedGuildData.name}
-                  className="w-6 h-6 rounded"
-                />
-              )}
-              <div>
-                <p className="text-sm font-medium text-gray-800">{selectedGuildData.name}</p>
-                <p className="text-xs text-gray-500">{selectedGuildData.memberCount}人のメンバー</p>
+        {/* サーバー情報 / スケルトン / プレースホルダ（高さ固定） */}
+        <div className="mt-2 p-2 bg-gray-50 rounded-lg h-20 flex items-center">
+          {initialLoading ? (
+            <div className="w-full animate-pulse flex items-center gap-4">
+              <div className="w-12 h-12 rounded bg-gray-300" />
+              <div className="flex-1 space-y-3">
+                <div className="h-4 bg-gray-300 rounded w-2/3" />
+                <div className="h-3 bg-gray-200 rounded w-1/2" />
               </div>
             </div>
-          </div>
-        )}
+          ) : selectedGuildData ? (
+            <div className="flex items-center gap-4 w-full">
+              {selectedGuildData.icon && (() => {
+                const desiredSize = 128
+                let src = selectedGuildData.icon
+                if (/^https?:\/\//.test(src)) {
+                  try {
+                    const u = new URL(src)
+                    u.searchParams.set('size', String(desiredSize))
+                    src = u.toString()
+                  } catch { /* そのまま */ }
+                } else {
+                  const isAnimated = src.startsWith('a_')
+                  const ext = isAnimated ? 'gif' : 'webp'
+                  src = `https://cdn.discordapp.com/icons/${selectedGuildData.id}/${src}.${ext}?size=${desiredSize}`
+                }
+                return (
+                  <img
+                    src={src}
+                    alt={selectedGuildData.name}
+                    className="w-12 h-12 rounded border border-gray-200 bg-white object-cover flex-shrink-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { e.currentTarget.style.display = 'none' }}
+                  />
+                )
+              })()}
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-800 truncate">
+                  {selectedGuildData.name}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {selectedGuildData.memberCount}人のメンバー
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="text-xs text-gray-500">
+              サーバー未選択
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ナビゲーション */}

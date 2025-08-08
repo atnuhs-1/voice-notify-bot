@@ -25,20 +25,47 @@ const discordPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
     ],
   });
 
-  // Discord Bot のログイン
+  // Fastifyインスタンスに登録（早期）
+  fastify.decorate('discord', client);
+
+  const LOGIN_TIMEOUT_MS = Number(process.env.DISCORD_LOGIN_TIMEOUT_MS || '15000');
+  const READY_TIMEOUT_MS = Number(process.env.DISCORD_READY_TIMEOUT_MS || '5000');
+
+  // READY を先に待機設定（login 前に listener を置く）
+  const readyPromise = new Promise<void>((resolve, reject) => {
+    client.once(Events.ClientReady, () => resolve());
+    client.once('error', (err) => reject(err));
+  });
+
+  // login フェーズ (明示タイムアウト)
+  fastify.log.info(`🔌 Discord login start (timeout=${LOGIN_TIMEOUT_MS}ms)`);
   try {
-    await client.login(process.env.DISCORD_TOKEN);
-    fastify.log.info(`✅ Discord Bot logged in as: ${client.user?.tag}`);
-  } catch (error) {
-    fastify.log.error('❌ Failed to login to Discord:', error);
-    throw error;
+    await Promise.race([
+      client.login(process.env.DISCORD_TOKEN),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Discord login timeout (${LOGIN_TIMEOUT_MS}ms)`)), LOGIN_TIMEOUT_MS)
+      )
+    ]);
+    fastify.log.info(`✅ Discord login resolved: ${client.user?.tag}`);
+  } catch (e) {
+    fastify.log.error({ err: e }, '❌ Discord login phase failed');
+    throw e;
   }
 
-  // Ready イベント
-  client.once(Events.ClientReady, (readyClient) => {
-    fastify.log.info(`🚀 Discord Bot ready! Logged in as ${readyClient.user.tag}`);
-    fastify.log.info(`📊 Connected to ${readyClient.guilds.cache.size} servers`);
-  });
+  // READY フェーズ (login 後追加の安全弁)
+  fastify.log.info(`⏳ Waiting Discord READY (timeout=${READY_TIMEOUT_MS}ms)`);
+  try {
+    await Promise.race([
+      readyPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`Discord READY timeout (${READY_TIMEOUT_MS}ms)`)), READY_TIMEOUT_MS)
+      )
+    ]);
+    fastify.log.info(`🚀 Discord READY (guilds=${client.guilds.cache.size})`);
+  } catch (e) {
+    fastify.log.error({ err: e }, '❌ Discord READY wait failed');
+    throw e;
+  }
 
   // ボイス状態変更イベント（データベース統合版）
   client.on(Events.VoiceStateUpdate, async (oldState: VoiceState, newState: VoiceState) => {
@@ -48,9 +75,6 @@ const discordPlugin: FastifyPluginAsync = async (fastify: FastifyInstance) => {
       fastify.log.error('❌ Error handling voice state update:', error);
     }
   });
-
-  // Fastifyインスタンスに登録
-  fastify.decorate('discord', client);
 
   // アプリケーション終了時のクリーンアップ
   fastify.addHook('onClose', async () => {

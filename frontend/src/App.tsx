@@ -1,140 +1,56 @@
-// React Router based app
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom'
-import { AuthProvider, useAuth } from './hooks/useAuth'
+// React Router based app with Jotai
+import { BrowserRouter as Router, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useAtomValue, useSetAtom } from 'jotai'
+import { 
+  authLoadingAtom, 
+  authErrorAtom, 
+  isAuthenticatedAtom,
+  retryAuthActionAtom,
+  clearAuthErrorActionAtom,
+  loginActionAtom,
+  authInitActionAtom
+} from './atoms/auth'
 import LoginScreen from './components/LoginScreen'
 import ErrorDisplay from './components/ErrorDisplay'
-import LoadingScreen from './components/LoadingScreen'
-import NeonDashboard from './components/NeonDashboard'
 import Layout from './components/layout/Layout'
 import DashboardPage from './pages/DashboardPage'
 import ChannelsPage from './pages/ChannelsPage'
 import MembersPage from './pages/MembersPage'
 import VoicePage from './pages/VoicePage'
 import MessagesPage from './pages/MessagesPage'
-import { useDiscordData } from './hooks/useDiscordData'
+import { useEffect } from 'react'
 import './App.css'
 
-// デザイン切り替えボタンコンポーネント
-function ThemeToggle() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const isNeonMode = location.pathname === '/neon'
-
-  const toggleTheme = () => {
-    if (isNeonMode) {
-      navigate('/')
-    } else {
-      navigate('/neon')
-    }
+// 認証保護付きのレイアウト（未認証なら /login へ）
+function ProtectedLayout({ isAuthenticated, isLoading }: { isAuthenticated: boolean; isLoading: boolean }) {
+  // 追加: 認証確認中はまだ判定を出さない（フラッシュ防止）
+  if (isLoading) {
+    return null // ここを <div /> やインラインスケルトンにしてもOK
   }
-
-  return (
-    <button
-      onClick={toggleTheme}
-      className={`fixed top-4 right-4 z-50 px-4 py-2 rounded-lg font-medium transition-all duration-300 theme-toggle-btn ${
-        isNeonMode
-          ? 'bg-cyan-500 text-black border border-cyan-400 shadow-[0_0_20px_rgba(0,255,255,0.5)] hover:shadow-[0_0_30px_rgba(0,255,255,0.8)]'
-          : 'bg-purple-600 text-white border border-purple-500 shadow-lg hover:bg-purple-700'
-      }`}
-      title={isNeonMode ? 'ノーマルモードに切り替え' : 'ネオンモードに切り替え'}
-    >
-      {isNeonMode ? (
-        <>
-          ☀️ <span className="ml-2">NORMAL</span>
-        </>
-      ) : (
-        <>
-          🌙 <span className="ml-2">NEON</span>
-        </>
-      )}
-    </button>
-  )
-}
-
-// 通常のダッシュボード（新しい設計）
-function NormalDashboard() {
-  const {
-    guilds,
-    selectedGuild,
-    setSelectedGuild,
-    stats,
-    loadData,
-    showResult
-  } = useDiscordData()
-
-  // 選択中のサーバーデータ
-  const selectedGuildData = guilds.find(g => g.id === selectedGuild)
-
-  // 共通のページプロパティ
-  const pageProps = {
-    guilds,
-    selectedGuild,
-    selectedGuildData,
-    showResult,
-    loadData,
-    stats,
-    setSelectedGuild
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
   }
-
   return (
-    <Layout
-      guilds={guilds}
-      selectedGuild={selectedGuild}
-      setSelectedGuild={setSelectedGuild}
-    >
-      <Routes>
-        <Route 
-          path="/" 
-          element={
-            <DashboardPage 
-              selectedGuild={selectedGuild}
-              selectedGuildData={selectedGuildData}
-              showResult={showResult}
-            />
-          } 
-        />
-        <Route path="/channels" element={<ChannelsPage {...pageProps} />} />
-        <Route path="/members" element={<MembersPage {...pageProps} />} />
-        <Route path="/voice" element={<VoicePage {...pageProps} />} />
-        <Route path="/messages" element={<MessagesPage {...pageProps} />} />
-      </Routes>
+    <Layout>
+      <Outlet />
     </Layout>
   )
 }
 
-// ネオンダッシュボードのラッパー（既存のNeonDashboardコンポーネントを使用）
-function NeonDashboardWrapper() {
-  return <NeonDashboard />
-}
-
-// 認証済みユーザー向けのルーティング
-function AuthenticatedApp() {
-  return (
-    <Router>
-      <ThemeToggle />
-      <Routes>
-        <Route path="/neon" element={<NeonDashboardWrapper />} />
-        <Route path="/*" element={<NormalDashboard />} />
-      </Routes>
-    </Router>
-  )
-}
-
-// 認証状態による条件付きレンダリング
+// 認証状態による条件付きレンダリング（ルーティング版）
 function AppContent() {
-  const { isAuthenticated, isLoading, error, retryAuth, clearError, login } = useAuth()
+  const isAuthenticated = useAtomValue(isAuthenticatedAtom)
+  const isLoading = useAtomValue(authLoadingAtom)
+  const error = useAtomValue(authErrorAtom)
+  const retryAuth = useSetAtom(retryAuthActionAtom)
+  const clearError = useSetAtom(clearAuthErrorActionAtom)
+  const login = useSetAtom(loginActionAtom)
+  const initAuth = useSetAtom(authInitActionAtom)
 
-  // 認証状態確認中
-  if (isLoading) {
-    return (
-      <LoadingScreen
-        message="認証状態を確認中..."
-        submessage="しばらくお待ちください"
-      />
-    )
-  }
+  useEffect(() => {
+    initAuth()
+  }, [initAuth])
 
-  // エラーが発生している場合
   if (error) {
     return (
       <ErrorDisplay
@@ -146,17 +62,38 @@ function AppContent() {
     )
   }
 
-  // 認証状態に応じてコンポーネントを切り替え
-  return isAuthenticated ? <AuthenticatedApp /> : <LoginScreen />
+  // ルーティング構成:
+  // /login → 未認証のみ。認証済みなら /
+  // 保護領域 (/) は ProtectedLayout 配下
+  return (
+    <Router>
+      <Routes>
+        <Route
+          path="/login"
+          element={
+            isAuthenticated
+              ? <Navigate to="/" replace />
+              : (isLoading ? null : <LoginScreen />) // 認証判定中は空（フラッシュ防止）
+          }
+        />
+        <Route element={<ProtectedLayout isAuthenticated={isAuthenticated} isLoading={isLoading} />}>
+          <Route path="/" element={<DashboardPage />} />
+            {/* 既存で /channels などを絶対パスで扱っていたのでそのまま */}
+          <Route path="/channels" element={<ChannelsPage />} />
+          <Route path="/members" element={<MembersPage />} />
+          <Route path="/voice" element={<VoicePage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+        </Route>
+        {/* 不明ルートはトップへ */}
+        <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
+      </Routes>
+    </Router>
+  )
 }
 
-// メインAppコンポーネント
+// メインAppコンポーネント（Jotai版 - AuthProvider不要）
 function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  )
+  return <AppContent />
 }
 
 export default App

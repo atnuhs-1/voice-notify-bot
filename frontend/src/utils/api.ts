@@ -1,12 +1,16 @@
 import type { 
   APIResponse, 
-  APIError, 
   RankingQuery, 
   TimelineQuery, 
   SummariesQuery 
 } from '../types/statistics';
+import { getDefaultStore } from 'jotai'
+import { authErrorAtom, authTokenAtom, authUserAtom, userGuildsAtom } from '../atoms/auth'
+import type { GuildsResponse } from '../types/discord';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+
+const store = getDefaultStore()
 
 // APIエラーハンドリング用のカスタムエラークラス
 export class APIException extends Error {
@@ -21,84 +25,86 @@ export class APIException extends Error {
   }
 }
 
+type ApiCallOptions = Omit<RequestInit, 'headers' | 'body'> & {
+  body?: any
+  auth?: boolean // 認証ヘッダー付与（デフォルト true）
+}
+
+function handleUnauthorized() {
+  // トークン/ユーザー情報をクリアし再ログイン誘導
+  store.set(authTokenAtom, null)
+  store.set(authUserAtom, null)
+  store.set(userGuildsAtom, [])
+  store.set(authErrorAtom, {
+    type: 'auth',
+    message: 'セッションが期限切れまたは無効です。再ログインしてください。',
+    canRetry: true,
+  })
+}
+
+
 // 認証ヘッダー付きAPI呼び出し関数
-const apiCall = async (endpoint: string, options?: RequestInit) => {
-  const fullUrl = `${API_BASE_URL}${endpoint}`;
+const apiCall = async <T = any>(endpoint: string, options: ApiCallOptions = {}): Promise<T> => {
+  const { body, auth = true, ...rest } = options
+  const fullUrl = `${API_BASE_URL}${endpoint}`
+
+  const token = auth ? store.get(authTokenAtom) : null
+  if (auth && !token) {
+    throw new APIException('NOT_AUTHENTICATED', 'NOT_AUTHENTICATED')
+  }
   
-  // console.log('API呼び出し:', fullUrl);
-  
-  // ローカルストレージからトークンを取得
-  const token = localStorage.getItem('discord_auth_token');
-  
-  const headers: Record<string, string> = {};
-  
-  // bodyがある場合のみContent-Typeを設定
-  if (options?.body) {
-    headers['Content-Type'] = 'application/json';
+  // 既存 + 追加ヘッダーを統一管理
+  const mergedHeaders = new Headers((options as any).headers)
+
+  // Body がある & Content-Type 未指定なら自動付与
+  if (body !== undefined && !mergedHeaders.has('Content-Type')) {
+    mergedHeaders.set('Content-Type', 'application/json')
   }
 
-  // 既存のヘッダーがある場合は安全に追加
-  if (options?.headers) {
-    const existingHeaders = new Headers(options.headers);
-    existingHeaders.forEach((value, key) => {
-      headers[key] = value;
-    });
+  // 認証必要なら Authorization 付与
+  if (auth && token) {
+    mergedHeaders.set('Authorization', `Bearer ${token}`)
   }
 
-  // トークンがある場合は認証ヘッダーを追加
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-    // console.log('認証トークン設定済み');
-  } else {
-    console.warn('認証トークンが見つかりません');
-  }
+  const serializedBody =
+    body === undefined
+      ? undefined
+      : typeof body === 'string'
+        ? body
+        : JSON.stringify(body)
 
   const response = await fetch(fullUrl, {
-    ...options,
-    headers,
-  });
+    ...rest,
+    headers: mergedHeaders,
+    body: serializedBody,
+  })
   
   // console.log('API レスポンス:', response.status);
 
-  // 401エラーの場合は認証切れ
   if (response.status === 401) {
-    localStorage.removeItem('discord_auth_token');
-    // ページリロードしてログイン画面へ
-    window.location.reload();
-    throw new Error('認証が期限切れです。再ログインしてください。');
+     // リロードせず状態だけクリア
+    localStorage.removeItem('discord_auth_token')
+    handleUnauthorized()
+    throw new APIException('UNAUTHORIZED', 'UNAUTHORIZED')
   }
 
-  const data = await response.json();
-  
-  // console.log('レスポンスデータ取得完了:', data.data ? 'データあり' : 'データなし');
-  
-  // ランキングデータの場合は簡潔にログ出力
-  if (fullUrl.includes('/statistics/rankings')) {
-    const rankingCount = data.data?.rankings?.length || 0;
-    if (rankingCount === 0) {
-      console.log('ランキングデータなし - 期間内に活動データがありません');
-    } else {
-      console.log(`ランキングデータ取得: ${rankingCount}件`);
-    }
+  let data: any = null
+  try {
+    data = await response.json()
+  } catch {
+    // 非JSONレスポンスはそのまま
   }
 
   if (!response.ok) {
-    console.error('API エラー:', response.status, response.statusText, fullUrl);
-    
-    // 新API設計のエラーレスポンス処理
-    if (data.error) {
-      const apiError = data.error as APIError;
-      throw new APIException(apiError.message, apiError.code, apiError.details);
-    }
-    throw new Error(`API Error: ${response.status} ${response.statusText}`);
+    const code = data?.error?.code || data?.error || `HTTP_${response.status}`
+    throw new APIException(code, code, data)
   }
 
-  // console.log('API呼び出し成功:', fullUrl);
-  return data;
+  return data
 };
 
-// データ取得API
-export const fetchGuilds = () => apiCall('/api/guilds?includeChannels=true');
+// データ取得API（トークン引数対応）
+export const fetchGuilds = () => apiCall<GuildsResponse>('/api/guilds?includeChannels=true');
 export const fetchStats = () => apiCall('/api/stats');
 
 // メッセージ送信API
@@ -110,7 +116,7 @@ export const sendMessage = (data: {
   embedColor?: string;
 }) => apiCall('/api/control/send-message', {
   method: 'POST',
-  body: JSON.stringify(data),
+  body: data,
 });
 
 // チャンネル作成API
@@ -122,7 +128,7 @@ export const createChannel = (data: {
   slowmode?: number;
 }) => apiCall('/api/control/create-channel', {
   method: 'POST',
-  body: JSON.stringify(data),
+  body: data,
 });
 
 // メンバー操作API
@@ -133,7 +139,7 @@ export const performMemberAction = (data: {
   value?: string;
 }) => apiCall('/api/control/member-action', {
   method: 'POST',
-  body: JSON.stringify(data),
+  body: data,
 });
 
 // 一括操作API
@@ -144,7 +150,7 @@ export const performBulkAction = (data: {
   sourceChannelId?: string;
 }) => apiCall('/api/control/bulk-action', {
   method: 'POST',
-  body: JSON.stringify(data),
+  body: data,
 });
 
 // チャンネル削除API

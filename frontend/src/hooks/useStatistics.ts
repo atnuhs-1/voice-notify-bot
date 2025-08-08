@@ -3,7 +3,7 @@ import {
   fetchRankings, 
   fetchTimeline, 
   fetchSummaries,
-  refreshStatistics,
+  // refreshStatistics,
   checkStatisticsChanges,
   APIException
 } from '../utils/api';

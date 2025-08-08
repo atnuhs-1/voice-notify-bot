@@ -331,7 +331,7 @@
 
 ### 3.3.5 実装時発見事項・課題
 - **状態管理の複雑化**: カスタムフック分散による状態管理の複雑さ
-- **提案**: Zustand等の状態管理ライブラリ導入検討
+- **提案**: Jotai等の状態管理ライブラリ導入検討
 - **メリット**: 
   - 状態の中央集権化・デバッグ容易性向上
   - useStatistics, useDiscordData, usePeriodSelector の統合
@@ -509,7 +509,7 @@
 - React Router による適切なSPA構造
 - 実データでの動作確認完了
 - プロダクション品質のコード実現
-- **状態管理ライブラリ（Zustand等）導入検討課題**: Phase 4前の重要検討事項
+- **状態管理ライブラリ（Jotai等）導入検討課題**: Phase 4前の重要検討事項
 
 ## 状態管理ライブラリ導入検討
 
@@ -522,7 +522,7 @@ Phase 3の実装完了により、カスタムフックでの状態管理の限�
 - **重複呼び出し問題**: useDiscordData の重複インスタンス作成によるデータ分離
 - **デバッグ困難**: 分散状態による問題特定の困難さ
 
-### Zustand 導入提案
+### Jotai 導入提案
 
 #### 導入メリット
 ```typescript
@@ -534,42 +534,56 @@ const App = () => {
   // props drilling の必要性
 }
 
-// Zustand 導入後のシンプルな状態管理
+// Jotai 導入後のシンプルな状態管理
 const App = () => {
-  // すべての状態が中央集権化
-  // コンポーネントはそれぞれ必要な状態のみを購読
+  // Atomic状態管理で必要な状態のみを購読
+  // 自動依存関係管理・Suspense完全対応
 }
 ```
 
 #### 具体的な改善点
-1. **中央集権化**: 全状態をストアで管理・デバッグ容易
+1. **Atomic State Management**: 小さなatomの組み合わせ・デバッグ容易
 2. **Prop Drilling 解消**: Layout へのprops渡しが不要
-3. **パフォーマンス向上**: 必要な状態変更時のみ再レンダリング
-4. **型安全性**: TypeScript との統合・完全な型推論
-5. **DevTools対応**: Redux DevTools でのデバッグ・状態可視化
+3. **自動依存関係管理**: useEffectの依存関係地獄から解放
+4. **Suspense完全対応**: 非同期データのローディング状態自動管理
+5. **型安全性**: TypeScript との完璧な統合・型推論
+6. **DevTools対応**: Jotai DevTools での状態可視化
 
 ### 推奨実装戦略
 
-#### Phase 3.5: Zustand 移行（オプション）
+#### Phase 3.5: Jotai 移行（推奨）
 ```typescript
-// stores/appStore.ts
-interface AppState {
-  // 認証状態
-  auth: AuthState
-  // サーバー管理
-  guilds: Guild[]
-  selectedGuild: string
-  // 統計データ
-  statistics: StatisticsState
-  // 期間選択
-  period: PeriodState
-  // アクション
-  actions: {
-    setSelectedGuild: (guildId: string) => void
-    fetchStatistics: () => Promise<void>
-    // ...
-  }
-}
+// atoms/auth.ts
+export const authUserAtom = atom<AuthUser | null>(null)
+export const isAuthenticatedAtom = atom((get) => get(authUserAtom) !== null)
+
+// atoms/discord.ts  
+export const guildsAtom = atom<Guild[]>([])
+export const selectedGuildIdAtom = atomWithStorage<string>('selected-guild-id', '')
+export const selectedGuildAtom = atom((get) => {
+  const guilds = get(guildsAtom)
+  const selectedId = get(selectedGuildIdAtom)
+  return guilds.find(guild => guild.id === selectedId) || null
+})
+
+// atoms/statistics.ts
+export const selectedPeriodAtom = atom({
+  type: 'week' as const,
+  from: getDefaultWeekStart(),
+  to: getDefaultWeekEnd(),
+})
+
+// atomFamily pattern でサーバー毎の統計データ
+export const rankingDataAtomFamily = atomFamily((guildId: string) => 
+  atom(async (get) => {
+    const period = get(selectedPeriodAtom)
+    const metric = get(selectedMetricAtom)
+    const user = get(authUserAtom)
+    
+    if (!guildId || !user) return null
+    return await fetchRankings(guildId, { metric, ...period })
+  })
+)
 ```
 
 #### 導入タイミング
@@ -578,10 +592,10 @@ interface AppState {
 - **延期**: Phase 4 完了後・必要性が確定してから
 
 ### 検討事項
-- **追加依存関係**: bundle size への影響（Zustand は軽量：2.9KB gzipped）
-- **学習コスト**: チーム全体でのZustand習得（2-3時間程度）
-- **移行コスト**: 既存のカスタムフック群のリファクタリング（2-3日）
-- **複雑性**: 小規模アプリでのオーバーエンジニアリング懸念
+- **追加依存関係**: bundle size への影響（Jotai：13.1KB gzipped）
+- **学習コスト**: チーム全体でのJotai習得（3-4時間程度・新しい概念）
+- **移行コスト**: 既存のカスタムフック群のリファクタリング（3-4日）
+- **複雑性**: Bottom-Up設計の習得・小規模アプリでのオーバーエンジニアリング懸念
 
 ### 実装者による導入評価
 
@@ -594,62 +608,87 @@ interface AppState {
 
 #### ROI分析
 **コスト**: 
-- 学習時間: 2-3時間（軽量・シンプル）
-- 移行時間: 2-3日（段階的なので小さなリスク）
-- Bundle増加: +2.9KB gzipped（非常に軽い）
+- 学習時間: 3-4時間（Atomic概念・新しいパラダイム）
+- 移行時間: 3-4日（段階的なので中程度のリスク）
+- Bundle増加: +13.1KB gzipped（現代的なアプリでは許容範囲）
 
 **ベネフィット**:
-- **開発効率**: Props drilling 解消で開発速度向上
-- **デバッグ**: Redux DevToolsで状態可視化
-- **保守性**: 状態の中央管理でメンテナンス性向上
-- **Phase 4準備**: 通知システム実装時の基盤安定化
+- **開発効率**: Props drilling 解消・自動依存関係管理で開発速度大幅向上
+- **デバッグ**: Jotai DevToolsで状態可視化
+- **保守性**: Bottom-Up設計でメンテナンス性向上・コードの理解容易
+- **非同期データ**: Suspense完全対応で複雑な非同期処理が美しく解決
+- **Phase 4準備**: 通知システム実装時の基盤として最適
 
 #### 結論
 **「導入しない理由がない」** - 現在のプロジェクト状況では明確にROIが高い。
 
 ### 推奨実装段階
 
-#### Step 1: 基本ストア作成
+#### Step 1: 基本Atom作成
 ```typescript
-// stores/appStore.ts
-import { create } from 'zustand'
-import { devtools } from 'zustand/middleware'
+// atoms/auth.ts
+import { atom } from 'jotai'
 
-interface AppState {
-  // 認証状態
-  isAuthenticated: boolean
-  user: User | null
-  
-  // サーバー管理
-  guilds: Guild[]
-  selectedGuild: string
-  
-  // 統計データ
-  statistics: {
-    rankings: RankingData | null
-    timeline: TimelineData | null
-    summaries: SummariesData | null
-    loading: boolean
-    error: string | null
-  }
-  
-  // 期間選択
-  selectedPeriod: PeriodSelection
-  
-  // アクション
-  actions: {
-    setSelectedGuild: (guildId: string) => void
-    fetchStatistics: () => Promise<void>
-    updatePeriod: (period: PeriodSelection) => void
-  }
-}
+export const authUserAtom = atom<AuthUser | null>(null)
+export const isAuthenticatedAtom = atom((get) => get(authUserAtom) !== null)
+
+// atoms/discord.ts
+import { atomWithStorage } from 'jotai/utils'
+
+export const guildsAtom = atom<Guild[]>([])
+export const selectedGuildIdAtom = atomWithStorage<string>('selected-guild-id', '')
+export const selectedGuildAtom = atom((get) => {
+  const guilds = get(guildsAtom)
+  const selectedId = get(selectedGuildIdAtom)
+  return guilds.find(guild => guild.id === selectedId) || null
+})
+
+// atoms/statistics.ts  
+import { atomFamily } from 'jotai/utils'
+
+export const selectedPeriodAtom = atom<PeriodSelection>({
+  type: 'week',
+  from: getDefaultWeekStart(),
+  to: getDefaultWeekEnd(),
+})
+
+export const selectedMetricAtom = atom<MetricType>('duration')
+
+// Family Pattern でサーバー毎の統計データ
+export const rankingDataAtomFamily = atomFamily((guildId: string) => 
+  atom(async (get) => {
+    const period = get(selectedPeriodAtom)
+    const metric = get(selectedMetricAtom)
+    const user = get(authUserAtom)
+    
+    if (!guildId || !user) return null
+    
+    const response = await fetchRankings(guildId, {
+      metric,
+      from: period.from,
+      to: period.to,
+      limit: 10,
+      compare: true
+    })
+    
+    return response.data
+  })
+)
 ```
 
 #### Step 2: 段階的移行スケジュール
-1. **Week 1**: useDiscordData → Zustand（最も痛い部分を優先）
-2. **Week 2**: useAuth → Zustand（認証状態の統一）
-3. **Week 3**: useStatistics → Zustand（統計データの統一）
-4. **Week 4**: usePeriodSelector → Zustand + 全体クリーンアップ
+1. **Week 1**: useDiscordData → Jotai atoms（最も痛い部分を優先）
+   - guildsAtom, selectedGuildIdAtom, selectedGuildAtom の実装
+   - App.tsx, Layout.tsx のProps drilling解消
+2. **Week 2**: useAuth → Jotai atoms（認証状態の統一）
+   - authUserAtom, isAuthenticatedAtom の実装
+   - 認証フローの統合
+3. **Week 3**: useStatistics → Jotai atoms（統計データの統一）
+   - 統計関連atomFamily の実装・Suspense境界設定
+   - DashboardPage の大幅簡素化
+4. **Week 4**: usePeriodSelector → Jotai atoms + 全体クリーンアップ
+   - selectedPeriodAtom の実装・DevTools設定
+   - カスタムフック完全削除・コード最適化
 
 ### Phase 4完了基準
 - [ ] 設定した時刻に通知が送信される
