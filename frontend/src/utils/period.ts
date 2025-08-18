@@ -5,19 +5,45 @@ import type { PeriodSelection, PeriodType } from '../types/statistics';
  */
 
 // 現在の週期間を取得（月曜始まり）
+// ISO 8601 週番号を取得（バックエンドと統一）
+function getISOWeek(date: Date): number {
+  const tempDate = new Date(date.getTime());
+  const dayOfWeek = (tempDate.getDay() + 6) % 7; // 月曜=0, 日曜=6
+  tempDate.setDate(tempDate.getDate() - dayOfWeek + 3); // 木曜日に移動
+  const firstThursday = tempDate.getTime();
+  tempDate.setMonth(0, 1); // 1月1日
+  if (tempDate.getDay() !== 4) {
+    tempDate.setMonth(0, 1 + ((4 - tempDate.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - tempDate.getTime()) / 604800000);
+}
+
+// ISO 8601 週の開始日と終了日を取得
+function getISOWeekBounds(date: Date): { start: Date; end: Date } {
+  const tempDate = new Date(date.getTime());
+  const dayOfWeek = (tempDate.getDay() + 6) % 7; // 月曜=0
+  
+  // 週の開始日（月曜日）
+  const start = new Date(tempDate);
+  start.setDate(tempDate.getDate() - dayOfWeek);
+  start.setHours(0, 0, 0, 0);
+  
+  // 週の終了日（日曜日）
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  
+  return { start, end };
+}
+
 export function getCurrentWeekPeriod(): PeriodSelection {
   const now = new Date();
-  const dayOfWeek = now.getDay(); // 0=日曜日
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-  
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  const { start, end } = getISOWeekBounds(now);
   
   return {
     type: 'week',
-    from: monday.toISOString().split('T')[0],
-    to: sunday.toISOString().split('T')[0],
+    from: start.toISOString().split('T')[0],
+    to: end.toISOString().split('T')[0],
   };
 }
 

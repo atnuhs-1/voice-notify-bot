@@ -117,6 +117,50 @@ function getWeeksInYear(year: number): number {
 }
 
 /**
+ * 指定期間がISO週の境界と完全に一致するかを判定
+ * 例: 2025-08-11 ～ 2025-08-17 → true (Week 33)
+ *     2025-08-10 ～ 2025-08-16 → false (複数週にまたがる)
+ */
+export function isISOWeekBoundary(from: string, to: string): boolean {
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  
+  // 同じ週に属するかチェック
+  const fromWeek = getCurrentPeriodKeys(fromDate).currentWeek;
+  const toWeek = getCurrentPeriodKeys(toDate).currentWeek;
+  
+  if (fromWeek !== toWeek) {
+    return false; // 異なる週にまたがる
+  }
+  
+  // 週の開始日・終了日と一致するかチェック
+  const weekStart = getPeriodStart('week', fromWeek);
+  const weekEnd = getPeriodEnd('week', fromWeek);
+  
+  return from === weekStart && to === weekEnd;
+}
+
+/**
+ * 指定期間がISO月の境界と完全に一致するかを判定
+ */
+export function isISOMonthBoundary(from: string, to: string): boolean {
+  const fromDate = new Date(from);
+  const toDate = new Date(to);
+  
+  const fromMonth = getCurrentPeriodKeys(fromDate).currentMonth;
+  const toMonth = getCurrentPeriodKeys(toDate).currentMonth;
+  
+  if (fromMonth !== toMonth) {
+    return false;
+  }
+  
+  const monthStart = getPeriodStart('month', fromMonth);
+  const monthEnd = getPeriodEnd('month', fromMonth);
+  
+  return from === monthStart && to === monthEnd;
+}
+
+/**
  * 期間の開始日を取得
  */
 export function getPeriodStart(periodType: PeriodType, periodKey: string): string {

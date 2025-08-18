@@ -13,6 +13,7 @@ import { PermissionLevel } from '../../../../types/api';
 import { API_ERROR_CODES } from '../../../../types/api';
 import { calculateRankingWithComparison } from '../../../../utils/statistics';
 import { validateDateRange, validateMetric } from '../../../../utils/validation';
+import { calculatePresetPeriod, isValidPreset, getPresetDescription, type PeriodPreset } from '../../../../utils/presets';
 
 const rankingsRoute: FastifyPluginAsync = async (fastify) => {
   // ランキング取得エンドポイント
@@ -27,7 +28,8 @@ const rankingsRoute: FastifyPluginAsync = async (fastify) => {
   }, async (request, reply) => {
     const { guildId } = request.params;
     const { 
-      metric, 
+      metric,
+      period,
       from, 
       to, 
       limit = 10, 
@@ -37,14 +39,14 @@ const rankingsRoute: FastifyPluginAsync = async (fastify) => {
     const requestId = fastify.generateRequestId();
     
     try {
-      // バリデーション
-      if (!metric || !from || !to) {
+      // 1. 基本バリデーション（metricは必須）
+      if (!metric) {
         return reply.code(400).send(fastify.createErrorResponse({
           code: API_ERROR_CODES.VALIDATION_ERROR,
-          message: 'metric, from, to パラメータは必須です',
+          message: 'metric パラメータは必須です',
           details: {
-            required: ['metric', 'from', 'to'],
-            provided: { metric, from, to }
+            required: ['metric'],
+            provided: { metric, period, from, to }
           }
         }, requestId));
       }
@@ -62,23 +64,74 @@ const rankingsRoute: FastifyPluginAsync = async (fastify) => {
         }, requestId));
       }
 
-      // 日付範囲検証
-      const dateValidation = validateDateRange(from, to);
-      if (!dateValidation.isValid) {
-        return reply.code(400).send(fastify.createErrorResponse({
-          code: API_ERROR_CODES.INVALID_DATE_RANGE,
-          message: '無効な日付範囲です',
-          details: {
-            field: 'date_range',
-            validation: dateValidation.error
-          }
-        }, requestId));
+      // 2. ハイブリッド期間パラメータの処理
+      let finalFrom: string;
+      let finalTo: string;
+      let searchType: 'preset' | 'custom';
+      let presetName: string | undefined;
+      let isOptimized: boolean;
+
+      if (period) {
+        // プリセット期間優先
+        if (!isValidPreset(period)) {
+          return reply.code(400).send(fastify.createErrorResponse({
+            code: API_ERROR_CODES.VALIDATION_ERROR,
+            message: '無効なプリセット期間が指定されました',
+            details: {
+              field: 'period',
+              value: period,
+              validation: 'this_week, last_week, this_month, last_month, last_7_days, last_30_days, this_year, last_year のいずれかを指定してください'
+            }
+          }, requestId));
+        }
+
+        const periodResult = calculatePresetPeriod(period as PeriodPreset);
+        finalFrom = periodResult.from;
+        finalTo = periodResult.to;
+        searchType = 'preset';
+        presetName = period;
+        isOptimized = periodResult.isISOBoundary;
+
+        console.log(`📅 Preset period: ${period} (${getPresetDescription(period as PeriodPreset)}) → ${finalFrom} to ${finalTo} (optimized: ${isOptimized})`);
+
+      } else if (from && to) {
+        // カスタム期間
+        const dateValidation = validateDateRange(from, to);
+        if (!dateValidation.isValid) {
+          return reply.code(400).send(fastify.createErrorResponse({
+            code: API_ERROR_CODES.INVALID_DATE_RANGE,
+            message: '無効な日付範囲です',
+            details: {
+              field: 'date_range',
+              validation: dateValidation.error
+            }
+          }, requestId));
+        }
+
+        finalFrom = from;
+        finalTo = to;
+        searchType = 'custom';
+        presetName = undefined;
+        isOptimized = false; // カスタム期間は最適化判定をランキング計算内で実行
+
+        console.log(`📅 Custom period: ${finalFrom} to ${finalTo}`);
+
+      } else {
+        // デフォルト（今週）
+        const defaultPeriod = calculatePresetPeriod('this_week');
+        finalFrom = defaultPeriod.from;
+        finalTo = defaultPeriod.to;
+        searchType = 'preset';
+        presetName = 'this_week';
+        isOptimized = true;
+
+        console.log(`📅 Default period: this_week → ${finalFrom} to ${finalTo}`);
       }
 
-      // リミット検証
+      // 3. リミット検証
       const limitNum = Math.min(Math.max(parseInt(String(limit)) || 10, 1), 100);
 
-      // サーバー権限チェック
+      // 4. サーバー権限チェック
       const hasAccess = await fastify.checkGuildAccess(request.user!.userId, guildId);
       if (!hasAccess) {
         return reply.code(403).send(fastify.createErrorResponse({
@@ -88,18 +141,18 @@ const rankingsRoute: FastifyPluginAsync = async (fastify) => {
         }, requestId));
       }
 
-      // ランキング計算
+      // 5. 統一されたランキング計算
       const result = await calculateRankingWithComparison(
         fastify.db,
         guildId,
         metric,
-        from,
-        to,
+        finalFrom,
+        finalTo,
         limitNum,
         compare
       );
 
-      // レスポンス構築
+      // 6. レスポンス構築（ハイブリッド情報付き）
       const responseData: RankingResponse = {
         rankings: result.rankings,
         period: result.period
@@ -111,7 +164,10 @@ const rankingsRoute: FastifyPluginAsync = async (fastify) => {
         totalParticipants: Number(result.totalParticipants),
         serverTotalDuration: Number(result.serverTotalDuration),
         metric,
-        hasComparison: compare && result.period.previous !== undefined
+        hasComparison: compare && result.period.previous !== undefined,
+        searchType,
+        preset: presetName,
+        isOptimized: isOptimized || (result as any).isCustomPeriod === false // 統計計算結果からも判定
       };
 
       const response: APIResponse<RankingResponse> = {
