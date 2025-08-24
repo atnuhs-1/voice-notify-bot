@@ -64,6 +64,9 @@ export interface RankingMeta extends APIResponseMeta {
   serverTotalDuration: number;
   metric: string;
   hasComparison: boolean;
+  searchType?: 'preset' | 'custom'; // ハイブリッド検索タイプ
+  preset?: string; // プリセット期間名（preset時のみ）
+  isOptimized?: boolean; // 高速ルート使用フラグ
 }
 
 // タイムライン表示用
@@ -224,10 +227,32 @@ export interface UserStatistics {
 }
 
 // APIクエリ用パラメータ型
+// バックエンドプリセット期間型
+export type BackendPeriodPreset = 
+  | 'this_week' | 'last_week' 
+  | 'this_month' | 'last_month' 
+  | 'last_7_days' | 'last_30_days' 
+  | 'this_year' | 'last_year';
+
+// ハイブリッド対応のランキングクエリ
 export interface RankingQuery {
   metric: 'duration' | 'sessions' | 'started_sessions';
-  from: string;
-  to: string;
+  // ハイブリッド期間指定
+  period?: BackendPeriodPreset;
+  from?: string;
+  to?: string;
+  limit?: number;
+  compare?: boolean;
+}
+
+// ハイブリッドAPIクライアント用パラメータ
+export interface GetRankingParams {
+  guildId: string;
+  metric: 'duration' | 'sessions' | 'started_sessions';
+  // ハイブリッド対応
+  period?: BackendPeriodPreset;
+  from?: string;
+  to?: string;
   limit?: number;
   compare?: boolean;
 }

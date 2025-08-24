@@ -2,44 +2,40 @@ import React, { useState, Suspense } from 'react';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { 
   selectedGuildAtom, 
-  showResultActionAtom 
+  showResultActionAtom,
+  selectedGuildIdAtom
 } from '../atoms/discord';
 import {
-  currentRankingDataAtom,
-  // currentTimelineDataAtom,
-  selectedPeriodAtom,
   selectedMetricAtom,
-  // updatePeriodActionAtom,
-  updateMetricActionAtom,
-  refreshStatisticsActionAtom
+  updateMetricActionAtom
 } from '../atoms/statistics';
 import {
-  periodPresetsAtom,
-  formattedPeriodAtom,
+  selectedPresetAtom,
   selectPresetActionAtom,
-  navigatePreviousActionAtom,
-  navigateNextActionAtom
-} from '../atoms/period';
+  formattedSelectedPeriodAtom,
+  optimizationStatusAtom,
+  refreshRankingActionAtom,
+  currentRankingAtom
+} from '../atoms/presets';
+import { PeriodPresetButtons, HybridApiInfo } from '../components/PeriodPresetButtons';
 import RankingTable from '../components/statistics/RankingTable';
-import type { MetricType } from '../types/statistics';
+import type { MetricType, BackendPeriodPreset } from '../types/statistics';
 
 const DashboardPage: React.FC = () => {
   const [activeView, setActiveView] = useState<'summary' | 'ranking' | 'timeline'>('summary');
   
   // Jotai atoms
   const selectedGuildData = useAtomValue(selectedGuildAtom);
-  const selectedPeriod = useAtomValue(selectedPeriodAtom);
+  const selectedPreset = useAtomValue(selectedPresetAtom);
   const selectedMetric = useAtomValue(selectedMetricAtom);
-  const formattedPeriod = useAtomValue(formattedPeriodAtom);
-  const presets = useAtomValue(periodPresetsAtom);
+  const formattedPeriod = useAtomValue(formattedSelectedPeriodAtom);
+  const optimizationStatus = useAtomValue(optimizationStatusAtom);
   
   // Actions
   const showResult = useSetAtom(showResultActionAtom);
   const updateMetric = useSetAtom(updateMetricActionAtom);
   const selectPreset = useSetAtom(selectPresetActionAtom);
-  const navigatePrevious = useSetAtom(navigatePreviousActionAtom);
-  const navigateNext = useSetAtom(navigateNextActionAtom);
-  const refreshStatistics = useSetAtom(refreshStatisticsActionAtom);
+  const refreshStatistics = useSetAtom(refreshRankingActionAtom);
 
   // 手動更新ハンドラー
   const handleRefresh = async () => {
@@ -52,9 +48,10 @@ const DashboardPage: React.FC = () => {
     }
   };
 
-  // 期間変更ハンドラー
-  const handlePeriodChange = (presetKey: string) => {
-    selectPreset(presetKey);
+  // プリセット変更ハンドラー
+  const handlePresetChange = (preset: BackendPeriodPreset) => {
+    selectPreset(preset);
+    console.log(`🔄 プリセット変更: ${preset}`);
   };
 
   // メトリクス変更ハンドラー
@@ -129,43 +126,23 @@ const DashboardPage: React.FC = () => {
           {/* 期間選択 */}
           <div>
             <h3 className="text-lg font-semibold text-gray-800 mb-3">📅 期間選択</h3>
-            <div className="flex flex-wrap gap-2">
-              {presets.map((preset) => (
-                <button
-                  key={preset.key}
-                  onClick={() => handlePeriodChange(preset.key)}
-                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    selectedPeriod.from === preset.period.from && selectedPeriod.to === preset.period.to
-                      ? 'bg-blue-100 text-blue-700 border-2 border-blue-300'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-2 border-transparent'
-                  }`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
+            <PeriodPresetButtons
+              selectedPreset={selectedPreset}
+              onPresetSelect={handlePresetChange}
+              className="mb-4"
+            />
             
-            {/* 期間ナビゲーション */}
-            <div className="flex items-center gap-3 mt-4">
-              <button
-                onClick={navigatePrevious}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title="前の期間"
-              >
-                ⬅️
-              </button>
-              <div className="text-center min-w-fit px-4 py-2 bg-gray-50 rounded-lg">
-                <div className="font-semibold text-gray-800">
-                  {formattedPeriod}
-                </div>
+            {/* 現在の期間表示 */}
+            <div className="text-center px-4 py-3 bg-gray-50 rounded-lg">
+              <div className="font-semibold text-gray-800">
+                {formattedPeriod}
               </div>
-              <button
-                onClick={navigateNext}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                title="次の期間"
-              >
-                ➡️
-              </button>
+              <HybridApiInfo
+                searchType={optimizationStatus.presetType !== 'custom' ? 'preset' : 'custom'}
+                preset={optimizationStatus.presetType !== 'custom' ? optimizationStatus.presetType : undefined}
+                isOptimized={optimizationStatus.isOptimized}
+                className="mt-2"
+              />
             </div>
           </div>
 
@@ -294,12 +271,15 @@ const DashboardPage: React.FC = () => {
   );
 };
 
-// Suspense対応のランキング表示コンポーネント
+// ハイブリッドAPI対応のランキング表示コンポーネント
 const RankingView: React.FC = () => {
-  const rankings = useAtomValue(currentRankingDataAtom);
+  const selectedGuildId = useAtomValue(selectedGuildIdAtom);
   const selectedMetric = useAtomValue(selectedMetricAtom);
+  
+  // 直接Jotaiでランキングデータを取得
+  const rankingData = useAtomValue(currentRankingAtom);
 
-  if (!rankings) {
+  if (!selectedGuildId) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🤖</div>
@@ -311,19 +291,35 @@ const RankingView: React.FC = () => {
     );
   }
 
+  // JotaiのSuspense機能を使用するため、ローディング・エラー処理はSuspense境界で管理
+
   return (
-    <RankingTable
-      data={rankings}
-      metric={{
-        type: selectedMetric,
-        label: selectedMetric === 'duration' ? '滞在時間' : selectedMetric === 'sessions' ? 'セッション数' : '開始セッション',
-        unit: selectedMetric === 'duration' ? '時間' : '回'
-      }}
-      loading={false} // Suspenseが処理するのでfalse
-      error={null}    // Suspenseが処理するのでnull
-      showComparison={true}
-      limit={10}
-    />
+    <div>
+      {/* 検索情報の表示（デバッグ用） */}
+      {rankingData?.meta && (
+        <div className="text-xs text-gray-500 mb-4 p-2 bg-gray-50 rounded-lg">
+          検索タイプ: {rankingData.meta.searchType} 
+          {rankingData.meta.preset && ` (${rankingData.meta.preset})`}
+          {rankingData.meta.isOptimized && ' 🚀 高速ルート'}
+          {rankingData.meta.totalParticipants && ` | 参加者: ${rankingData.meta.totalParticipants}人`}
+        </div>
+      )}
+      
+      {/* ランキング表示 */}
+      {rankingData?.data?.rankings && (
+        <RankingTable
+          data={rankingData.data}
+          metric={{ 
+            type: selectedMetric, 
+            label: selectedMetric === 'duration' ? '滞在時間' : selectedMetric === 'sessions' ? 'セッション数' : '開始セッション', 
+            unit: selectedMetric === 'duration' ? '時間' : '回' 
+          }}
+          loading={false}  // JotaiのSuspenseで管理
+          error={null}     // JotaiのSuspenseで管理
+          showComparison={true}
+        />
+      )}
+    </div>
   );
 };
 

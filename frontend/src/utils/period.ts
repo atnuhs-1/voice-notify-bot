@@ -6,7 +6,7 @@ import type { PeriodSelection, PeriodType } from '../types/statistics';
 
 // 現在の週期間を取得（月曜始まり）
 // ISO 8601 週番号を取得（バックエンドと統一）
-function getISOWeek(date: Date): number {
+export function getISOWeek(date: Date): number {
   const tempDate = new Date(date.getTime());
   const dayOfWeek = (tempDate.getDay() + 6) % 7; // 月曜=0, 日曜=6
   tempDate.setDate(tempDate.getDate() - dayOfWeek + 3); // 木曜日に移動
@@ -242,7 +242,7 @@ export function isValidPeriod(period: PeriodSelection): boolean {
   return fromDate <= toDate && !isNaN(fromDate.getTime()) && !isNaN(toDate.getTime());
 }
 
-// デフォルトの週開始日と終了日を取得（useStatistics用）
+// デフォルトの週開始日と終了日を取得
 export function getDefaultWeekStart(): string {
   return getCurrentWeekPeriod().from;
 }
