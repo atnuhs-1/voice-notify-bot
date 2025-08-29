@@ -49,6 +49,9 @@ export interface DatabaseHelpers {
   createDailySummary(guildId: string, activityDate: string, summary: Partial<DailyActivitySummary>): Promise<void>;
   getDailySummary(guildId: string, activityDate: string): Promise<DailyActivitySummary | null>;
   
+  // 汎用クエリ実行関数
+  query(query: { sql: string; args: any[] }): Promise<{ rows: any[]; rowsAffected?: number }>;
+  
   // 週次・月次サマリー操作
   createWeeklySummary(guildId: string, weekKey: string, summary: Partial<any>): Promise<void>;
   createMonthlySummary(guildId: string, monthKey: string, summary: Partial<any>): Promise<void>;
@@ -541,6 +544,15 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
         isNotified: Boolean(row.isNotified),
         notifiedAt: row.notifiedAt as string | null,
         createdAt: row.createdAt as string,
+      };
+    },
+
+    // 汎用クエリ実行関数
+    async query(query: { sql: string; args: any[] }) {
+      const result = await client.execute(query);
+      return {
+        rows: result.rows,
+        rowsAffected: result.rowsAffected
       };
     },
 
