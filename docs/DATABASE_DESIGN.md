@@ -886,58 +886,15 @@ push_subscriptions: 最大100ユーザー = 100レコード (約20KB)
 
 **総データ量**: 年間約22MB（Turso無料枠内で十分対応可能）
 
-## 実装フェーズ（更新版）
+## 実装状況
 
-### ✅ Phase 1-2: バックエンド基盤・統計システム（完全実装済み）
+**📋 詳細な実装状況・フェーズ管理は [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) を参照してください。**
 
-#### データベース・統計機能（✅ 完了）
-1. **✅ 完了**: データベーステーブル作成・マイグレーション
-   - `user_voice_activities`, `period_user_stats` テーブル完全実装・動作中
-   - インデックス作成・最適化済み・高速クエリ対応
-2. **✅ 完了**: 個人入退室記録システム
-   - Discord イベントハンドラー完全実装・リアルタイム記録動作中
-   - リアルタイム統計更新機能完全動作・週次/月次/年次自動計算
-3. **✅ 完了**: 統計API基盤
-   - ランキングAPI (`GET /api/v1/guilds/{guildId}/statistics/rankings`) 完全実装
-   - タイムラインAPI (`GET /api/v1/guilds/{guildId}/statistics/timeline`) 完全実装
-   - サマリー履歴API (`GET /api/v1/guilds/{guildId}/statistics/summaries`) 完全実装
-
-#### API基盤・権限システム（✅ 完了）
-1. **✅ 完了**: 統一APIレスポンス形式
-   - `{data, meta, error?}` 構造完全実装・全エンドポイント対応
-   - 構造化エラーハンドリング完全実装・詳細エラーコード対応
-2. **✅ 完了**: 権限システム完全実装
-   - VIEW/MANAGE/EXECUTE 3段階権限完全実装・動作中
-   - Discord権限連携完全実装・サーバー管理者チェック動作中
-3. **✅ 完了**: プラグインシステム
-   - response, permission, validation プラグイン完全実装
-   - utils/statistics.ts, utils/period.ts 統計計算システム完全動作
-
-### 🔄 Phase 3: フロントエンド統計機能（部分実装）
-- ✅ **統計ダッシュボード基盤**（React Router SPA・認証フロー完全動作）
-- 🔄 **統計データ表示**（バックエンドAPI完全実装・フロントエンド未実装）
-- 🔄 **ランキング表示機能**（バックエンドAPI完全実装・フロントエンド未実装）
-- 🔄 **タイムライン表示機能**（バックエンドAPI完全実装・フロントエンド未実装）
-
-### 📅 Phase 4: 通知システム実装（次期優先）
-1. **データベース準備完了**: 通知スケジュール管理
-   - `notification_schedules` テーブル完全実装済み
-   - `daily_activity_summaries` 等サマリーテーブル完全実装済み
-2. **未実装**: 通知API・自動化システム
-   - スケジュール管理API（未実装）
-   - テスト通知API（未実装）
-   - Discord通知送信システム（未実装）
-   - Cronスケジューラー（未実装）
-
-### Phase 5: PWA・最適化・拡張（将来実装）
-1. **PWA基盤実装**
-   - Service Worker 実装
-   - Web Push API 対応
-   - プッシュ通知購読管理
-2. **パフォーマンス最適化**
-   - Redis導入検討
-   - 通知配信の最適化
-   - 統計計算の高速化
+### データベース実装状況の概要
+- **統計テーブル**: ✅ **完全実装** (`user_voice_activities`, `period_user_stats`)
+- **通知テーブル**: ✅ **データベース準備完了** (`notification_schedules`, `*_activity_summaries`)
+- **インデックス・最適化**: ✅ **完了** (ランキング・タイムライン高速化対応)
+- **リアルタイム統計更新**: ✅ **完全動作** (Discord イベント → 即座に統計更新)
 
 ## 技術的考慮事項
 
