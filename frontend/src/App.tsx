@@ -12,6 +12,7 @@ import {
 } from './atoms/auth'
 import LoginScreen from './components/LoginScreen'
 import ErrorDisplay from './components/ErrorDisplay'
+import LoadingScreen from './components/LoadingScreen'
 import Layout from './components/layout/Layout'
 import DashboardPage from './pages/DashboardPage'
 import ChannelsPage from './pages/ChannelsPage'
@@ -23,9 +24,12 @@ import './App.css'
 
 // 認証保護付きのレイアウト（未認証なら /login へ）
 function ProtectedLayout({ isAuthenticated, isLoading }: { isAuthenticated: boolean; isLoading: boolean }) {
-  // 追加: 認証確認中はまだ判定を出さない（フラッシュ防止）
+  // 認証確認中は専用のローディング画面を表示
   if (isLoading) {
-    return null // ここを <div /> やインラインスケルトンにしてもOK
+    return <LoadingScreen 
+      message="認証状態を確認中..." 
+      submessage="しばらくお待ちください"
+    />
   }
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
@@ -73,7 +77,7 @@ function AppContent() {
           element={
             isAuthenticated
               ? <Navigate to="/" replace />
-              : (isLoading ? null : <LoginScreen />) // 認証判定中は空（フラッシュ防止）
+              : (isLoading ? <LoadingScreen message="認証情報を確認中..." submessage="Discordアカウントを確認しています" /> : <LoginScreen />)
           }
         />
         <Route element={<ProtectedLayout isAuthenticated={isAuthenticated} isLoading={isLoading} />}>
