@@ -3,7 +3,6 @@ import { useAtomValue, useSetAtom } from 'jotai';
 import { 
   selectedGuildAtom, 
   showResultActionAtom,
-  selectedGuildIdAtom
 } from '../atoms/discord';
 import {
   selectedMetricAtom,
@@ -15,10 +14,11 @@ import {
   formattedSelectedPeriodAtom,
   optimizationStatusAtom,
   refreshRankingActionAtom,
-  currentRankingAtom
 } from '../atoms/presets';
+import { refreshSummariesActionAtom } from '../atoms/summaries';
 import { PeriodPresetButtons, HybridApiInfo } from '../components/PeriodPresetButtons';
-import RankingTable from '../components/statistics/RankingTable';
+import RankingView from '../components/statistics/RankingView';
+import SummaryView from '../components/statistics/SummaryView';
 import type { MetricType, BackendPeriodPreset } from '../types/statistics';
 
 const DashboardPage: React.FC = () => {
@@ -36,11 +36,16 @@ const DashboardPage: React.FC = () => {
   const updateMetric = useSetAtom(updateMetricActionAtom);
   const selectPreset = useSetAtom(selectPresetActionAtom);
   const refreshStatistics = useSetAtom(refreshRankingActionAtom);
+  const refreshSummaries = useSetAtom(refreshSummariesActionAtom);
 
   // 手動更新ハンドラー
   const handleRefresh = async () => {
     try {
-      await refreshStatistics();
+      // ランキングとサマリーを並列で更新
+      await Promise.all([
+        refreshStatistics(),
+        refreshSummaries()
+      ]);
       showResult('統計データを更新しました', 'success');
     } catch (error) {
       console.error('統計データ更新エラー:', error);
@@ -194,22 +199,16 @@ const DashboardPage: React.FC = () => {
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         {activeView === 'summary' && (
           <div className="p-6">
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">📊</div>
-              <h3 className="text-xl font-semibold text-gray-700 mb-2">統計サマリー</h3>
-              <p className="text-gray-500 mb-4">
-                統計サマリー機能は現在開発中です
-              </p>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-                <h4 className="font-medium text-blue-800 mb-2">実装予定機能</h4>
-                <ul className="text-sm text-blue-700 text-left space-y-1">
-                  <li>• 総活動時間・参加者数の統計</li>
-                  <li>• 平均セッション時間</li>
-                  <li>• MVP表示</li>
-                  <li>• 前期間との比較</li>
-                </ul>
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <div className="animate-spin text-4xl mb-4">🔄</div>
+                  <p className="text-gray-600">サマリーデータを読み込み中...</p>
+                </div>
               </div>
-            </div>
+            }>
+              <SummaryView />
+            </Suspense>
           </div>
         )}
 
@@ -271,56 +270,5 @@ const DashboardPage: React.FC = () => {
   );
 };
 
-// ハイブリッドAPI対応のランキング表示コンポーネント
-const RankingView: React.FC = () => {
-  const selectedGuildId = useAtomValue(selectedGuildIdAtom);
-  const selectedMetric = useAtomValue(selectedMetricAtom);
-  
-  // 直接Jotaiでランキングデータを取得
-  const rankingData = useAtomValue(currentRankingAtom);
-
-  if (!selectedGuildId) {
-    return (
-      <div className="text-center py-12">
-        <div className="text-6xl mb-4">🤖</div>
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">サーバーを選択してください</h3>
-        <p className="text-gray-500">
-          左のサイドバーからサーバーを選択して、統計データを表示しましょう
-        </p>
-      </div>
-    );
-  }
-
-  // JotaiのSuspense機能を使用するため、ローディング・エラー処理はSuspense境界で管理
-
-  return (
-    <div>
-      {/* 検索情報の表示（デバッグ用） */}
-      {rankingData?.meta && (
-        <div className="text-xs text-gray-500 mb-4 p-2 bg-gray-50 rounded-lg">
-          検索タイプ: {rankingData.meta.searchType} 
-          {rankingData.meta.preset && ` (${rankingData.meta.preset})`}
-          {rankingData.meta.isOptimized && ' 🚀 高速ルート'}
-          {rankingData.meta.totalParticipants && ` | 参加者: ${rankingData.meta.totalParticipants}人`}
-        </div>
-      )}
-      
-      {/* ランキング表示 */}
-      {rankingData?.data?.rankings && (
-        <RankingTable
-          data={rankingData.data}
-          metric={{ 
-            type: selectedMetric, 
-            label: selectedMetric === 'duration' ? '滞在時間' : selectedMetric === 'sessions' ? 'セッション数' : '開始セッション', 
-            unit: selectedMetric === 'duration' ? '時間' : '回' 
-          }}
-          loading={false}  // JotaiのSuspenseで管理
-          error={null}     // JotaiのSuspenseで管理
-          showComparison={true}
-        />
-      )}
-    </div>
-  );
-};
 
 export default DashboardPage;
