@@ -2,25 +2,29 @@ import React from 'react';
 import { useAtomValue } from 'jotai';
 import { selectedGuildIdAtom } from '../../atoms/discord';
 import { 
-  currentSummaryAtom, 
-  summaryComparisonAtom,
-  summaryTypeStrategyAtom 
+  currentSummaryAtom
 } from '../../atoms/summaries';
-import { formattedSelectedPeriodAtom } from '../../atoms/presets';
+import { Card } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import {
+  Clock,
+  Users,
+  Activity,
+  TrendingUp,
+  Trophy,
+  ChevronRight,
+} from 'lucide-react';
 
 const SummaryView: React.FC = () => {
   const selectedGuildId = useAtomValue(selectedGuildIdAtom);
-  const formattedPeriod = useAtomValue(formattedSelectedPeriodAtom);
-  const summaryType = useAtomValue(summaryTypeStrategyAtom);
   const currentSummary = useAtomValue(currentSummaryAtom);
-  const summaryComparison = useAtomValue(summaryComparisonAtom);
 
   if (!selectedGuildId) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">🤖</div>
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">サーバーを選択してください</h3>
-        <p className="text-gray-500">
+        <h3 className="text-xl font-semibold text-foreground mb-2 font-sans">サーバーを選択してください</h3>
+        <p className="text-muted-foreground font-serif">
           左のサイドバーからサーバーを選択して、統計サマリーを表示しましょう
         </p>
       </div>
@@ -28,253 +32,175 @@ const SummaryView: React.FC = () => {
   }
 
   const currentData = currentSummary?.data?.summaries?.[0];
-  console.log("currentData: ", currentData);
 
   if (!currentData) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">📊</div>
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">データがありません</h3>
-        <p className="text-gray-500 mb-4">
+        <h3 className="text-xl font-semibold text-foreground mb-2 font-sans">データがありません</h3>
+        <p className="text-muted-foreground mb-4 font-serif">
           選択された期間にはデータがまだ蓄積されていません
         </p>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-md mx-auto">
-          <p className="text-sm text-blue-700">
+        <Card className="bg-blue-50 border border-blue-200 p-4 max-w-md mx-auto">
+          <p className="text-sm text-blue-700 font-serif">
             💡 ボイスチャンネルでの活動後、数分でデータが表示されます
           </p>
-        </div>
+        </Card>
       </div>
     );
   }
 
+  const stats = [
+    {
+      title: "総活動時間",
+      value: formatDuration(currentData.metrics.totalDuration),
+      icon: Clock,
+      trend: undefined,
+      colorClasses: "bg-blue-50 text-blue-700 border-blue-200",
+    },
+    {
+      title: "参加者数",
+      value: `${currentData.metrics.totalParticipants}人`,
+      icon: Users,
+      trend: undefined,
+      colorClasses: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    },
+    {
+      title: "セッション数",
+      value: `${currentData.metrics.totalSessions}回`,
+      icon: Activity,
+      trend: undefined,
+      colorClasses: "bg-cyan-50 text-cyan-700 border-cyan-200",
+    },
+    {
+      title: currentData.metrics.averageDailyDuration !== null ? "1日平均活動時間" : "最長セッション",
+      value: formatDuration(currentData.metrics.averageDailyDuration !== null 
+        ? currentData.metrics.averageDailyDuration 
+        : currentData.metrics.longestSession || 0),
+      icon: TrendingUp,
+      trend: undefined,
+      colorClasses: "bg-amber-50 text-amber-700 border-amber-200",
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* 期間情報ヘッダー */}
-      <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800">📊 統計サマリー</h2>
-            <p className="text-sm text-gray-600">{formattedPeriod}</p>
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-gray-500">集計タイプ</div>
-            <div className="text-sm font-medium text-gray-700">
-              {summaryType === 'weekly' ? '📊 週次' : '🗓️ 月次'}
-            </div>
-          </div>
-        </div>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((stat, index) => (
+          <StatsCard
+            key={index}
+            title={stat.title}
+            value={stat.value}
+            icon={stat.icon}
+            colorClasses={stat.colorClasses}
+          />
+        ))}
       </div>
 
-      {/* メイン統計カード */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          title="総活動時間"
-          value={formatDuration(currentData.metrics.totalDuration)}
-          icon="⏱️"
-          comparison={summaryComparison?.duration}
-          color="blue"
-        />
-        <StatCard
-          title="参加者数"
-          value={`${currentData.metrics.totalParticipants}人`}
-          icon="👥"
-          comparison={summaryComparison?.participants}
-          color="green"
-        />
-        <StatCard
-          title="セッション数"
-          value={`${currentData.metrics.totalSessions}回`}
-          icon="🎮"
-          comparison={summaryComparison?.sessions}
-          color="purple"
-        />
-        <StatCard
-          title={currentData.metrics.averageDailyDuration !== null ? "1日平均活動時間" : "最長セッション"}
-          value={formatDuration(currentData.metrics.averageDailyDuration !== null ? currentData.metrics.averageDailyDuration : currentData.metrics.longestSession || 0)}
-          icon="🏆"
-          color="orange"
-        />
-      </div>
-
-      {/* MVP表示 */}
+      {/* MVP Section */}
       {currentData.topUser && (
-        <div className="bg-white rounded-lg p-6 border-l-4 border-yellow-400">
-          <div className="flex items-center gap-4">
-            <div className="text-4xl">🏆</div>
+        <Card className="p-4 border-l-4 border-l-amber-400 bg-gradient-to-r from-amber-50 to-orange-50">
+          <div className="flex items-center gap-3">
+            <div className="text-3xl">🏆</div>
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-800 mb-1">期間MVP</h3>
+              <h3 className="text-lg font-semibold text-foreground mb-1 font-sans">期間MVP</h3>
               <div className="flex items-center gap-3">
-                <div className="text-xl font-bold text-yellow-600">
+                <div className="text-xl font-bold text-amber-600 font-sans">
                   {currentData.topUser.username}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="text-xs text-muted-foreground font-serif">
                   総活動時間: <span className="font-medium">{formatDuration(currentData.topUser.duration)}</span>
                 </div>
               </div>
+              <Progress 
+                value={currentData.metrics.totalDuration > 0 
+                  ? (currentData.topUser.duration / currentData.metrics.totalDuration) * 100 
+                  : 0
+                } 
+                className="mt-2 w-40" 
+              />
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
-      {/* 期間比較情報 */}
-      {summaryComparison && (
-        <div className="bg-white rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">📈 前期間との比較</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <ComparisonItem
-              title="活動時間"
-              current={formatDuration(summaryComparison.duration.current)}
-              change={summaryComparison.duration.change}
-              changePercent={summaryComparison.duration.changePercent}
-              formatChange={formatDuration}
-            />
-            <ComparisonItem
-              title="参加者数"
-              current={`${summaryComparison.participants.current}人`}
-              change={summaryComparison.participants.change}
-              changePercent={summaryComparison.participants.changePercent}
-              formatChange={(val) => `${val > 0 ? '+' : ''}${val}人`}
-            />
-            <ComparisonItem
-              title="セッション数"
-              current={`${summaryComparison.sessions.current}回`}
-              change={summaryComparison.sessions.change}
-              changePercent={summaryComparison.sessions.changePercent}
-              formatChange={(val) => `${val > 0 ? '+' : ''}${val}回`}
-            />
+
+      {/* Compact Analysis Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-4 hover:shadow-md transition-all duration-200 cursor-pointer group">
+          <div className="flex items-start gap-3">
+            <Trophy className="w-6 h-6 text-amber-500" />
+            <div className="flex-1">
+              <h4 className="font-medium text-foreground mb-1 font-sans">ランキング詳細</h4>
+              <p className="text-xs text-muted-foreground mb-2 font-serif">ユーザー別の詳細ランキング</p>
+              <div className="flex items-center text-xs text-blue-600 font-medium group-hover:text-blue-700 transition-colors">
+                <span className="font-serif">ランキングを見る</span>
+                <ChevronRight className="w-3 h-3 ml-1" />
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        </Card>
 
-      {/* クイックアクション */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">🔍 詳細分析</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <ActionCard
-            title="ランキング詳細"
-            description="ユーザー別の詳細ランキングを確認"
-            icon="🏆"
-            actionText="ランキングを見る"
-          />
-          <ActionCard
-            title="タイムライン詳細"
-            description="セッションの詳細履歴を確認"
-            icon="⏰"
-            actionText="タイムラインを見る"
-          />
-        </div>
+        <Card className="p-4 hover:shadow-md transition-all duration-200 cursor-pointer group">
+          <div className="flex items-start gap-3">
+            <Clock className="w-6 h-6 text-blue-500" />
+            <div className="flex-1">
+              <h4 className="font-medium text-foreground mb-1 font-sans">タイムライン詳細</h4>
+              <p className="text-xs text-muted-foreground mb-2 font-serif">セッションの詳細履歴</p>
+              <div className="flex items-center text-xs text-blue-600 font-medium group-hover:text-blue-700 transition-colors">
+                <span className="font-serif">タイムラインを見る</span>
+                <ChevronRight className="w-3 h-3 ml-1" />
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {/* デバッグ情報（開発時のみ） */}
+      {/* Debug Info (Development only) */}
       {process.env.NODE_ENV === 'development' && currentSummary?.meta && (
-        <div className="bg-gray-100 rounded-lg p-4">
-          <h4 className="text-sm font-medium text-gray-700 mb-2">🔧 デバッグ情報</h4>
-          <div className="text-xs text-gray-600 space-y-1">
+        <Card className="p-4 bg-muted">
+          <h4 className="text-sm font-medium text-foreground mb-2 font-sans">🔧 デバッグ情報</h4>
+          <div className="text-xs text-muted-foreground space-y-1 font-serif">
             <div>検索タイプ: {currentSummary.meta.searchType}</div>
             <div>サマリータイプ: {currentSummary.meta.summaryType}</div>
             <div>キャッシュキー: {currentSummary.meta.cacheKey}</div>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   );
 };
 
-// 統計カードコンポーネント
-interface StatCardProps {
+// Statistics Card Component (v0 style)
+interface StatsCardProps {
   title: string;
   value: string;
-  icon: string;
-  comparison?: {
-    current: number;
-    previous: number;
-    change: number;
-    changePercent: number | null;
-  };
-  color: 'blue' | 'green' | 'purple' | 'orange';
+  icon: React.ComponentType<{ className?: string }>;
+  colorClasses: string;
 }
 
-const StatCard: React.FC<StatCardProps> = ({ title, value, icon, comparison, color }) => {
-  const colorClasses = {
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-    green: 'bg-green-50 border-green-200 text-green-700',
-    purple: 'bg-purple-50 border-purple-200 text-purple-700',
-    orange: 'bg-orange-50 border-orange-200 text-orange-700'
-  };
-
-  return (
-    <div className={`rounded-lg p-4 border ${colorClasses[color]}`}>
-      <div className="flex items-center justify-between mb-2">
-        <div className="text-2xl">{icon}</div>
-        {comparison && comparison.changePercent !== null && (
-          <div className={`text-xs font-medium ${
-            comparison.change > 0 ? 'text-green-600' : 
-            comparison.change < 0 ? 'text-red-600' : 'text-gray-500'
-          }`}>
-            {comparison.change > 0 ? '↗️' : comparison.change < 0 ? '↘️' : '➖'} 
-            {Math.abs(comparison.changePercent)}%
-          </div>
-        )}
-      </div>
-      <div className="font-medium text-gray-600 text-sm mb-1">{title}</div>
-      <div className="text-xl font-bold text-gray-800">{value}</div>
-    </div>
-  );
-};
-
-// 比較アイテムコンポーネント
-interface ComparisonItemProps {
-  title: string;
-  current: string;
-  change: number;
-  changePercent: number | null;
-  formatChange: (value: number) => string;
-}
-
-const ComparisonItem: React.FC<ComparisonItemProps> = ({ 
-  title, current, change, changePercent, formatChange 
+const StatsCard: React.FC<StatsCardProps> = ({ 
+  title, 
+  value, 
+  icon: IconComponent, 
+  colorClasses 
 }) => {
   return (
-    <div className="text-center">
-      <div className="text-sm text-gray-600 mb-1">{title}</div>
-      <div className="text-lg font-semibold text-gray-800 mb-1">{current}</div>
-      {changePercent !== null && (
-        <div className={`text-sm font-medium ${
-          change > 0 ? 'text-green-600' : change < 0 ? 'text-red-600' : 'text-gray-500'
-        }`}>
-          {formatChange(change)} ({change > 0 ? '+' : ''}{changePercent}%)
-        </div>
-      )}
-    </div>
-  );
-};
-
-// アクションカードコンポーネント
-interface ActionCardProps {
-  title: string;
-  description: string;
-  icon: string;
-  actionText: string;
-}
-
-const ActionCard: React.FC<ActionCardProps> = ({ title, description, icon, actionText }) => {
-  return (
-    <div className="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors">
-      <div className="flex items-start gap-3">
-        <div className="text-2xl">{icon}</div>
-        <div className="flex-1">
-          <h4 className="font-medium text-gray-800 mb-1">{title}</h4>
-          <p className="text-sm text-gray-600 mb-3">{description}</p>
-          <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-            {actionText} →
-          </button>
-        </div>
+    <Card className={`p-4 border-2 ${colorClasses} hover:shadow-lg transition-all duration-200`}>
+      <div className="flex items-center mb-3">
+        <IconComponent className="w-6 h-6" />
       </div>
-    </div>
+      <div className="space-y-1">
+        <p className="text-xs font-medium text-muted-foreground font-serif">{title}</p>
+        <p className="text-xl font-bold text-foreground font-sans">{value}</p>
+      </div>
+    </Card>
   );
 };
 
-// ユーティリティ関数
+
+// Utility Functions
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
@@ -287,5 +213,6 @@ function formatDuration(seconds: number): string {
     return `${seconds}秒`;
   }
 }
+
 
 export default SummaryView;
