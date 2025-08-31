@@ -9,6 +9,7 @@ import {
 import { refreshSummariesActionAtom } from "../atoms/summaries";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import LoadingFallback from "@/components/ui/LoadingFallback";
 import RankingView from "../components/statistics/RankingView";
 import SummaryView from "../components/statistics/SummaryView";
 import {
@@ -194,24 +195,12 @@ const DashboardPage: React.FC = () => {
       {activeView === "summary" && (
         <Suspense
           fallback={
-            <Card className="p-8">
-              <div className="flex items-center justify-center">
-                <div className="text-center">
-                  <div className="relative mb-6">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-border border-t-blue-600 mx-auto"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <BarChart3 className="w-5 h-5 text-blue-600" />
-                    </div>
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-2 font-sans">
-                    サマリーデータを読み込み中
-                  </h3>
-                  <p className="text-muted-foreground text-sm font-serif">
-                    統計情報を準備しています...
-                  </p>
-                </div>
-              </div>
-            </Card>
+            <LoadingFallback
+              icon={BarChart3}
+              title="サマリーデータを読み込み中"
+              description="統計情報を準備しています..."
+              iconColor="text-green-500"
+            />
           }
         >
           <SummaryView />
@@ -221,24 +210,12 @@ const DashboardPage: React.FC = () => {
       {activeView === "ranking" && (
         <Suspense
           fallback={
-            <Card className="p-8">
-              <div className="flex items-center justify-center">
-                <div className="text-center">
-                  <div className="relative mb-6">
-                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-border border-t-blue-600 mx-auto"></div>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Trophy className="w-5 h-5 text-blue-600" />
-                    </div>
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-2 font-sans">
-                    ランキングデータを読み込み中
-                  </h3>
-                  <p className="text-muted-foreground text-sm font-serif">
-                    順位情報を準備しています...
-                  </p>
-                </div>
-              </div>
-            </Card>
+            <LoadingFallback
+              icon={Trophy}
+              title="ランキングデータを読み込み中"
+              description="順位情報を準備しています..."
+              iconColor="text-amber-500"
+            />
           }
         >
           <RankingView />
