@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
-import { useAtomValue, useSetAtom } from 'jotai';
+import React from 'react';
+import { useAtomValue } from 'jotai';
 import { authUserAtom } from '../../atoms/auth';
-import { selectedGuildAtom, autoRefreshOnAuthAtom, guildsInitialLoadingAtom } from '../../atoms/discord';
+import { selectedGuildAtom, guildsInitialLoadingAtom } from '../../atoms/discord';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Card } from '@/components/ui/card';
+import { Server } from 'lucide-react';
 import Sidebar from './Sidebar';
 import ErrorBoundary from '../ErrorBoundary';
 
@@ -14,12 +16,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const user = useAtomValue(authUserAtom);
   const selectedGuildData = useAtomValue(selectedGuildAtom);
   const initialLoading = useAtomValue(guildsInitialLoadingAtom);
-  const autoRefresh = useSetAtom(autoRefreshOnAuthAtom);
-
-  // 認証状態変更時にDiscordデータを自動更新
-  useEffect(() => {
-    autoRefresh();
-  }, [autoRefresh]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -61,17 +57,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Page Content */}
         <main className="flex-1 p-6 space-y-6">
           {initialLoading ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center animate-pulse">
-                <div className="text-5xl mb-4">⏳</div>
-                <h2 className="text-lg font-semibold text-gray-700 mb-2">
-                  ギルド情報を読み込み中...
-                </h2>
-                <p className="text-gray-500 text-sm">
-                  少しお待ちください
-                </p>
+            <Card className="p-8">
+              <div className="flex items-center justify-center">
+                <div className="text-center">
+                  <div className="relative mb-6">
+                    <div className="animate-spin rounded-full h-12 w-12 border-4 border-border border-t-blue-600 mx-auto"></div>
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Server className="w-5 h-5 text-blue-600" />
+                    </div>
+                  </div>
+                  <h3 className="text-lg font-semibold text-foreground mb-2 font-sans">ギルド情報を読み込み中</h3>
+                  <p className="text-muted-foreground text-sm font-serif">サーバー情報を準備しています...</p>
+                </div>
               </div>
-            </div>
+            </Card>
           ) : selectedGuildData ? (
             <ErrorBoundary
               fallback={(error, errorInfo, retry) => (

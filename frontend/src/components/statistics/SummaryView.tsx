@@ -11,8 +11,6 @@ import {
   Users,
   Activity,
   TrendingUp,
-  Trophy,
-  ChevronRight,
 } from 'lucide-react';
 
 const SummaryView: React.FC = () => {
@@ -124,38 +122,6 @@ const SummaryView: React.FC = () => {
           </div>
         </Card>
       )}
-
-
-      {/* Compact Analysis Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="p-4 hover:shadow-md transition-all duration-200 cursor-pointer group">
-          <div className="flex items-start gap-3">
-            <Trophy className="w-6 h-6 text-amber-500" />
-            <div className="flex-1">
-              <h4 className="font-medium text-foreground mb-1 font-sans">ランキング詳細</h4>
-              <p className="text-xs text-muted-foreground mb-2 font-serif">ユーザー別の詳細ランキング</p>
-              <div className="flex items-center text-xs text-blue-600 font-medium group-hover:text-blue-700 transition-colors">
-                <span className="font-serif">ランキングを見る</span>
-                <ChevronRight className="w-3 h-3 ml-1" />
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <Card className="p-4 hover:shadow-md transition-all duration-200 cursor-pointer group">
-          <div className="flex items-start gap-3">
-            <Clock className="w-6 h-6 text-blue-500" />
-            <div className="flex-1">
-              <h4 className="font-medium text-foreground mb-1 font-sans">タイムライン詳細</h4>
-              <p className="text-xs text-muted-foreground mb-2 font-serif">セッションの詳細履歴</p>
-              <div className="flex items-center text-xs text-blue-600 font-medium group-hover:text-blue-700 transition-colors">
-                <span className="font-serif">タイムラインを見る</span>
-                <ChevronRight className="w-3 h-3 ml-1" />
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
 
       {/* Debug Info (Development only) */}
       {process.env.NODE_ENV === 'development' && currentSummary?.meta && (

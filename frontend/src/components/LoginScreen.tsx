@@ -1,8 +1,13 @@
 import { useAtomValue, useSetAtom } from 'jotai'
 import { authLoadingAtom, loginActionAtom } from '../atoms/auth'
 
-export default function LoginScreen() {
-  const isLoading = useAtomValue(authLoadingAtom)
+interface LoginScreenProps {
+  isLoading?: boolean;
+}
+
+export default function LoginScreen({ isLoading: externalLoading }: LoginScreenProps = {}) {
+  const internalLoading = useAtomValue(authLoadingAtom)
+  const isLoading = externalLoading || internalLoading
   const login = useSetAtom(loginActionAtom)
 
   return (
