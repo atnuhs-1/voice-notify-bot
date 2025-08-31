@@ -148,7 +148,8 @@ const rankingsRoute: FastifyPluginAsync = async (fastify) => {
         finalFrom,
         finalTo,
         limitNum,
-        compare
+        compare,
+        fastify.discord
       );
 
       // 6. レスポンス構築（ハイブリッド情報付き）

@@ -3,7 +3,37 @@
 
 import type { Client } from '@libsql/client';
 import type { UserVoiceActivity } from '../types/database';
+import type { Client as DiscordClient } from 'discord.js';
 import { getCurrentPeriodKeys, getPreviousPeriodKey, getPeriodStart, getPeriodEnd, isISOWeekBoundary, isISOMonthBoundary } from './period';
+
+/**
+ * Discord ユーザーのアバター情報を取得
+ */
+async function getUserAvatar(discordClient: DiscordClient, userId: string): Promise<string | null> {
+  try {
+    const user = await discordClient.users.fetch(userId);
+    return user.avatar || null;
+  } catch (error) {
+    // ユーザーが見つからない場合やAPIエラーの場合はnullを返す
+    return null;
+  }
+}
+
+/**
+ * 複数ユーザーのアバター情報を一括取得（パフォーマンス最適化）
+ */
+async function getUserAvatars(discordClient: DiscordClient, userIds: string[]): Promise<{ [userId: string]: string | null }> {
+  const avatars: { [userId: string]: string | null } = {};
+  
+  // 並列処理でアバターを取得（Discord API rate limitに注意）
+  const promises = userIds.map(async (userId) => {
+    const avatar = await getUserAvatar(discordClient, userId);
+    avatars[userId] = avatar;
+  });
+  
+  await Promise.all(promises);
+  return avatars;
+}
 
 /**
  * Phase 2.2.2: 前期間比較付きランキング計算
@@ -16,7 +46,8 @@ export async function calculateRankingWithComparison(
   from: string,
   to: string,
   limit: number = 10,
-  compare: boolean = true
+  compare: boolean = true,
+  discordClient?: DiscordClient
 ) {
   // ハイブリッド検索: 期間境界判定
   const daysDiff = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
@@ -24,16 +55,16 @@ export async function calculateRankingWithComparison(
   // ISO境界チェック
   if (daysDiff <= 7 && isISOWeekBoundary(from, to)) {
     // 高速: period_user_stats検索（週境界）
-    return await calculateWeeklyRankingFast(client, guildId, metric, from, to, limit, compare);
+    return await calculateWeeklyRankingFast(client, guildId, metric, from, to, limit, compare, discordClient);
   } else if (daysDiff <= 31 && isISOMonthBoundary(from, to)) {
     // 高速: period_user_stats検索（月境界）
     // TODO: 月境界計算を後で実装
     console.log(`⚡ Monthly boundary detected, falling back to custom calculation`);
-    return await calculateCustomRanking(client, guildId, metric, from, to, limit, compare);
+    return await calculateCustomRanking(client, guildId, metric, from, to, limit, compare, discordClient);
   } else {
     // 柔軟: user_voice_activities検索（カスタム期間）
     console.log(`🔄 Using custom period calculation for ${from} - ${to}`);
-    return await calculateCustomRanking(client, guildId, metric, from, to, limit, compare);
+    return await calculateCustomRanking(client, guildId, metric, from, to, limit, compare, discordClient);
   }
 }
 
@@ -47,7 +78,8 @@ async function calculateWeeklyRankingFast(
   from: string,
   to: string,
   limit: number,
-  compare: boolean
+  compare: boolean,
+  discordClient?: DiscordClient
 ) {
   const periods = getCurrentPeriodKeys(new Date(from));
   const periodType = 'week';
@@ -115,6 +147,13 @@ async function calculateWeeklyRankingFast(
     });
   }
 
+  // アバター情報を一括取得
+  let avatars: { [userId: string]: string | null } = {};
+  if (discordClient) {
+    const userIds = currentRanking.rows.map((row: any) => row.userId);
+    avatars = await getUserAvatars(discordClient, userIds);
+  }
+
   // ランキングデータの構築
   const rankings = currentRanking.rows.map((current: any) => {
     const currentValue = metric === 'duration' ? current.totalDuration :
@@ -127,7 +166,7 @@ async function calculateWeeklyRankingFast(
       rank: current.rank,
       userId: current.userId,
       username: current.username,
-      avatar: null, // フロントエンドでDiscord APIから取得
+      avatar: avatars[current.userId] || null,
       value: currentValue,
       sessionCount: current.sessionCount,
       longestSession: current.longestSession,
@@ -173,7 +212,8 @@ export async function generateTimeline(
   client: Client,
   guildId: string,
   from: string,
-  to: string
+  to: string,
+  discordClient?: DiscordClient
 ) {
   // 指定期間の全活動を取得
   const activities = await client.execute({
@@ -211,6 +251,7 @@ export async function generateTimeline(
   let longestSession = 0;
   const userDurations: { [userId: string]: number } = {};
 
+  // まずユーザーセッションを構築
   activities.rows.forEach((activity: any) => {
     if (!userSessions[activity.userId]) {
       userSessions[activity.userId] = {
@@ -267,6 +308,17 @@ export async function generateTimeline(
     }
   });
 
+  // アバター情報を一括取得
+  if (discordClient) {
+    const userIds = Object.keys(userSessions);
+    const avatars = await getUserAvatars(discordClient, userIds);
+    
+    // ユーザーセッションにアバター情報を設定
+    Object.keys(userSessions).forEach(userId => {
+      userSessions[userId].avatar = avatars[userId];
+    });
+  }
+
   // 最もアクティブなユーザーの特定
   let mostActiveUser: any = null;
   let maxDuration = 0;
@@ -313,7 +365,8 @@ export async function calculateCustomRanking(
   from: string,
   to: string,
   limit: number = 10,
-  compare: boolean = true
+  compare: boolean = true,
+  discordClient?: DiscordClient
 ) {
   // カスタム期間の統計を計算
   const currentStats = await calculateCustomPeriodStats(client, guildId, from, to);
@@ -346,46 +399,55 @@ export async function calculateCustomRanking(
   const sortField = metric === 'duration' ? 'totalDuration' : 
                    metric === 'sessions' ? 'sessionCount' : 
                    'startedSessionCount';
-                   
-  const rankings = currentStats.userStats
+  
+  const sortedUsers = currentStats.userStats
     .sort((a: any, b: any) => b[sortField] - a[sortField])
-    .slice(0, limit)
-    .map((user: any, index: number) => {
-      const previous = previousStats[user.userId];
+    .slice(0, limit);
+
+  // アバター情報を一括取得
+  let avatars: { [userId: string]: string | null } = {};
+  if (discordClient) {
+    const userIds = sortedUsers.map((user: any) => user.userId);
+    avatars = await getUserAvatars(discordClient, userIds);
+  }
+
+  const rankings = sortedUsers.map((user: any, index: number) => {
+    const previous = previousStats[user.userId];
+    
+    let comparison = null;
+    if (compare && previous) {
+      const previousValue = previous[sortField] || 0;
+      const change = user[sortField] - previousValue;
+      const changePercentage = previousValue > 0 ? Math.round((change / previousValue) * 100) : null;
       
-      let comparison = null;
-      if (compare && previous) {
-        const previousValue = previous[sortField] || 0;
-        const change = user[sortField] - previousValue;
-        const changePercentage = previousValue > 0 ? Math.round((change / previousValue) * 100) : null;
-        
-        comparison = {
-          previousValue,
-          change,
-          changePercentage,
-          rankChange: null, // カスタム期間では順位変動は複雑なため省略
-          isNew: false
-        };
-      } else if (compare && !previous) {
-        comparison = {
-          previousValue: 0,
-          change: user[sortField],
-          changePercentage: null,
-          rankChange: null,
-          isNew: true
-        };
-      }
-      
-      return {
-        rank: index + 1,
-        userId: user.userId,
-        username: user.username,
-        value: user[sortField],
-        sessionCount: user.sessionCount,
-        longestSession: user.longestSession,
-        comparison: comparison || undefined
+      comparison = {
+        previousValue,
+        change,
+        changePercentage,
+        rankChange: null, // カスタム期間では順位変動は複雑なため省略
+        isNew: false
       };
-    });
+    } else if (compare && !previous) {
+      comparison = {
+        previousValue: 0,
+        change: user[sortField],
+        changePercentage: null,
+        rankChange: null,
+        isNew: true
+      };
+    }
+    
+    return {
+      rank: index + 1,
+      userId: user.userId,
+      username: user.username,
+      avatar: avatars[user.userId] || null,
+      value: user[sortField],
+      sessionCount: user.sessionCount,
+      longestSession: user.longestSession,
+      comparison: comparison || undefined
+    };
+  });
   
   return {
     rankings,

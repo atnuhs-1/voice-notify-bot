@@ -96,7 +96,8 @@ const timelineRoute: FastifyPluginAsync = async (fastify) => {
         fastify.db,
         guildId,
         from,
-        to
+        to,
+        fastify.discord
       );
 
       // チャンネル名の取得（Discord APIから）
