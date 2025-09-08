@@ -1,7 +1,7 @@
 import { atom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
 import { fetchGuilds, fetchStats } from '../utils/api'
-import { authTokenAtom, isAuthenticatedAtom } from './auth'
+import { authTokenAtom, isAuthenticatedAtom, userGuildsAtom } from './auth'
 import type { Guild, BotStats, ResultMessage } from '../types/discord'
 
 // === 基本状態atoms ===
@@ -30,11 +30,19 @@ export const discordResultAtom = atom<ResultMessage | null>(null)
 
 // === 計算atoms ===
 
-// 選択中のサーバー情報
+// 選択中のサーバー情報（詳細なGuild型、統計画面用）
 export const selectedGuildAtom = atom((get) => {
   const guilds = get(guildsAtom)
   const selectedId = get(selectedGuildIdAtom)
+  console.log(`selectedGuildAtom: selectedId=${selectedId}, guildsCount=${guilds.length}`)
   return guilds.find(guild => guild.id === selectedId) || null
+})
+
+// 選択中のサーバー情報（認証時のUserGuild型、Sidebar用）
+export const selectedUserGuildAtom = atom((get) => {
+  const userGuilds = get(userGuildsAtom)
+  const selectedId = get(selectedGuildIdAtom)
+  return userGuilds.find(guild => guild.id === selectedId) || null
 })
 
 // 総ローディング状態（認証ローディングも含む）

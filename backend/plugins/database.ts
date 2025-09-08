@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import { createClient, Client } from '@libsql/client';
 import type { FastifyPluginAsync } from 'fastify';
+import { getPeriodStart, getPeriodEnd } from '../utils/period';
 import type {
   Notification,
   VoiceSession,
@@ -49,6 +50,9 @@ export interface DatabaseHelpers {
   createDailySummary(guildId: string, activityDate: string, summary: Partial<DailyActivitySummary>): Promise<void>;
   getDailySummary(guildId: string, activityDate: string): Promise<DailyActivitySummary | null>;
   
+  // 汎用クエリ実行関数
+  query(query: { sql: string; args: any[] }): Promise<{ rows: any[]; rowsAffected?: number }>;
+  
   // 週次・月次サマリー操作
   createWeeklySummary(guildId: string, weekKey: string, summary: Partial<any>): Promise<void>;
   createMonthlySummary(guildId: string, monthKey: string, summary: Partial<any>): Promise<void>;
@@ -82,9 +86,6 @@ export interface DatabaseHelpers {
   // 通知チェック関数
   getActiveNotificationSchedules(scheduleType: 'daily' | 'weekly' | 'monthly', currentTime: string): Promise<NotificationSchedule[]>;
   
-  // 期間の開始・終了日を取得するヘルパー関数
-  getWeekStartEnd(weekKey: string): [string, string];
-  getMonthStartEnd(monthKey: string): [string, string];
 }
 
 // 型定義は ../types/database.ts からインポート
@@ -544,10 +545,20 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
       };
     },
 
+    // 汎用クエリ実行関数
+    async query(query: { sql: string; args: any[] }) {
+      const result = await client.execute(query);
+      return {
+        rows: result.rows,
+        rowsAffected: result.rowsAffected
+      };
+    },
+
     // 週次・月次サマリー操作
     async createWeeklySummary(guildId: string, weekKey: string, summary: Partial<any>) {
       const now = new Date().toISOString();
-      const [weekStart, weekEnd] = this.getWeekStartEnd(weekKey);
+      const weekStart = getPeriodStart('week', weekKey);
+      const weekEnd = getPeriodEnd('week', weekKey);
 
       await client.execute({
         sql: `INSERT OR REPLACE INTO weekly_activity_summaries 
@@ -575,7 +586,8 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
 
     async createMonthlySummary(guildId: string, monthKey: string, summary: Partial<any>) {
       const now = new Date().toISOString();
-      const [monthStart, monthEnd] = this.getMonthStartEnd(monthKey);
+      const monthStart = getPeriodStart('month', monthKey);
+      const monthEnd = getPeriodEnd('month', monthKey);
 
       await client.execute({
         sql: `INSERT OR REPLACE INTO monthly_activity_summaries 
@@ -712,31 +724,6 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
       }));
     },
 
-    // 期間の開始・終了日を取得するヘルパー関数
-    getWeekStartEnd(weekKey: string): [string, string] {
-      const [year, week] = weekKey.split('-W').map(Number);
-      const startOfYear = new Date(year, 0, 1);
-      const daysToFirstMonday = (8 - startOfYear.getDay()) % 7;
-      const firstMonday = new Date(year, 0, 1 + daysToFirstMonday);
-      const weekStart = new Date(firstMonday.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
-      const weekEnd = new Date(weekStart.getTime() + 6 * 24 * 60 * 60 * 1000);
-      
-      return [
-        weekStart.toISOString().split('T')[0],
-        weekEnd.toISOString().split('T')[0]
-      ];
-    },
-
-    getMonthStartEnd(monthKey: string): [string, string] {
-      const [year, month] = monthKey.split('-').map(Number);
-      const monthStart = new Date(year, month - 1, 1);
-      const monthEnd = new Date(year, month, 0); // 月の最終日
-      
-      return [
-        monthStart.toISOString().split('T')[0],
-        monthEnd.toISOString().split('T')[0]
-      ];
-    },
   };
 
   // Fastifyインスタンスに登録

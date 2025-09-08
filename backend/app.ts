@@ -12,6 +12,7 @@ import authPlugin from './plugins/auth'
 import responsePlugin from './plugins/response'
 import permissionPlugin from './plugins/permission'
 import commandsPlugin from './plugins/commands'
+import schedulerPlugin from './plugins/scheduler'
 import keepalivePlugin from './plugins/keepalive'
 
 export interface AppOptions extends FastifyServerOptions, Partial<AutoloadPluginOptions> {
@@ -51,6 +52,9 @@ const app: FastifyPluginAsync<AppOptions> = async (
   
   await fastify.register(commandsPlugin)
   fastify.log.info('✅ Commands plugin loaded')
+  
+  await fastify.register(schedulerPlugin)
+  fastify.log.info('✅ Scheduler plugin loaded')
   
   await fastify.register(keepalivePlugin)
   fastify.log.info('✅ Keep-alive plugin loaded')

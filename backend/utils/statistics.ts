@@ -2,8 +2,38 @@
 // ランキング計算関数とタイムライン生成関数
 
 import type { Client } from '@libsql/client';
-import type { PeriodType, UserVoiceActivity } from '../types/database';
-import { getCurrentPeriodKeys, getPreviousPeriodKey, getPeriodStart, getPeriodEnd } from './period';
+import type { UserVoiceActivity } from '../types/database';
+import type { Client as DiscordClient } from 'discord.js';
+import { getCurrentPeriodKeys, getPreviousPeriodKey, getPeriodStart, getPeriodEnd, isISOWeekBoundary, isISOMonthBoundary } from './period';
+
+/**
+ * Discord ユーザーのアバター情報を取得
+ */
+async function getUserAvatar(discordClient: DiscordClient, userId: string): Promise<string | null> {
+  try {
+    const user = await discordClient.users.fetch(userId);
+    return user.avatar || null;
+  } catch (error) {
+    // ユーザーが見つからない場合やAPIエラーの場合はnullを返す
+    return null;
+  }
+}
+
+/**
+ * 複数ユーザーのアバター情報を一括取得（パフォーマンス最適化）
+ */
+async function getUserAvatars(discordClient: DiscordClient, userIds: string[]): Promise<{ [userId: string]: string | null }> {
+  const avatars: { [userId: string]: string | null } = {};
+  
+  // 並列処理でアバターを取得（Discord API rate limitに注意）
+  const promises = userIds.map(async (userId) => {
+    const avatar = await getUserAvatar(discordClient, userId);
+    avatars[userId] = avatar;
+  });
+  
+  await Promise.all(promises);
+  return avatars;
+}
 
 /**
  * Phase 2.2.2: 前期間比較付きランキング計算
@@ -16,24 +46,46 @@ export async function calculateRankingWithComparison(
   from: string,
   to: string,
   limit: number = 10,
-  compare: boolean = true
+  compare: boolean = true,
+  discordClient?: DiscordClient
 ) {
-  // 期間タイプを自動判定
+  // ハイブリッド検索: 期間境界判定
   const daysDiff = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
-  let periodType: PeriodType;
-  let currentPeriod: string;
   
-  const periods = getCurrentPeriodKeys(new Date(from));
-  if (daysDiff <= 7) {
-    periodType = 'week';
-    currentPeriod = periods.currentWeek;
-  } else if (daysDiff <= 31) {
-    periodType = 'month';
-    currentPeriod = periods.currentMonth;
+  // ISO境界チェック
+  if (daysDiff <= 7 && isISOWeekBoundary(from, to)) {
+    // 高速: period_user_stats検索（週境界）
+    return await calculateWeeklyRankingFast(client, guildId, metric, from, to, limit, compare, discordClient);
+  } else if (daysDiff <= 31 && isISOMonthBoundary(from, to)) {
+    // 高速: period_user_stats検索（月境界）
+    // TODO: 月境界計算を後で実装
+    console.log(`⚡ Monthly boundary detected, falling back to custom calculation`);
+    return await calculateCustomRanking(client, guildId, metric, from, to, limit, compare, discordClient);
   } else {
-    periodType = 'year';
-    currentPeriod = periods.currentYear;
+    // 柔軟: user_voice_activities検索（カスタム期間）
+    console.log(`🔄 Using custom period calculation for ${from} - ${to}`);
+    return await calculateCustomRanking(client, guildId, metric, from, to, limit, compare, discordClient);
   }
+}
+
+/**
+ * 週境界での高速ランキング計算（既存ロジック）
+ */
+async function calculateWeeklyRankingFast(
+  client: Client,
+  guildId: string,
+  metric: 'duration' | 'sessions' | 'started_sessions',
+  from: string,
+  to: string,
+  limit: number,
+  compare: boolean,
+  discordClient?: DiscordClient
+) {
+  const periods = getCurrentPeriodKeys(new Date(from));
+  const periodType = 'week';
+  const currentPeriod = periods.currentWeek;
+  
+  console.log(`⚡ Using fast weekly calculation for period: ${currentPeriod}`);
 
   // SQLの最適化: 適切なインデックスを利用
   const orderBy = metric === 'duration' ? 'totalDuration DESC' : 
@@ -95,6 +147,13 @@ export async function calculateRankingWithComparison(
     });
   }
 
+  // アバター情報を一括取得
+  let avatars: { [userId: string]: string | null } = {};
+  if (discordClient) {
+    const userIds = currentRanking.rows.map((row: any) => row.userId);
+    avatars = await getUserAvatars(discordClient, userIds);
+  }
+
   // ランキングデータの構築
   const rankings = currentRanking.rows.map((current: any) => {
     const currentValue = metric === 'duration' ? current.totalDuration :
@@ -107,7 +166,7 @@ export async function calculateRankingWithComparison(
       rank: current.rank,
       userId: current.userId,
       username: current.username,
-      avatar: null, // フロントエンドでDiscord APIから取得
+      avatar: avatars[current.userId] || null,
       value: currentValue,
       sessionCount: current.sessionCount,
       longestSession: current.longestSession,
@@ -128,18 +187,7 @@ export async function calculateRankingWithComparison(
     };
   });
 
-  // サーバー統計の計算
-  const serverStats = await client.execute({
-    sql: `
-      SELECT 
-        COUNT(DISTINCT userId) as totalParticipants,
-        SUM(totalDuration) as serverTotalDuration
-      FROM period_user_stats 
-      WHERE guildId = ? AND periodType = ? AND periodKey = ?
-    `,
-    args: [guildId, periodType, currentPeriod]
-  });
-
+  // レスポンス構築
   return {
     rankings,
     period: {
@@ -150,10 +198,9 @@ export async function calculateRankingWithComparison(
         to: getPeriodEnd(periodType, previousPeriod)
       } : undefined
     },
-    totalParticipants: serverStats.rows[0]?.totalParticipants || 0,
-    serverTotalDuration: serverStats.rows[0]?.serverTotalDuration || 0,
-    periodType,
-    currentPeriod
+    totalParticipants: currentRanking.rows.length,
+    serverTotalDuration: currentRanking.rows.reduce((sum: number, row: any) => sum + Number(row.totalDuration), 0),
+    isCustomPeriod: false
   };
 }
 
@@ -165,7 +212,8 @@ export async function generateTimeline(
   client: Client,
   guildId: string,
   from: string,
-  to: string
+  to: string,
+  discordClient?: DiscordClient
 ) {
   // 指定期間の全活動を取得
   const activities = await client.execute({
@@ -203,6 +251,7 @@ export async function generateTimeline(
   let longestSession = 0;
   const userDurations: { [userId: string]: number } = {};
 
+  // まずユーザーセッションを構築
   activities.rows.forEach((activity: any) => {
     if (!userSessions[activity.userId]) {
       userSessions[activity.userId] = {
@@ -259,6 +308,17 @@ export async function generateTimeline(
     }
   });
 
+  // アバター情報を一括取得
+  if (discordClient) {
+    const userIds = Object.keys(userSessions);
+    const avatars = await getUserAvatars(discordClient, userIds);
+    
+    // ユーザーセッションにアバター情報を設定
+    Object.keys(userSessions).forEach(userId => {
+      userSessions[userId].avatar = avatars[userId];
+    });
+  }
+
   // 最もアクティブなユーザーの特定
   let mostActiveUser: any = null;
   let maxDuration = 0;
@@ -290,6 +350,178 @@ export async function generateTimeline(
       activeSessionsCount: Object.values(userSessions)
         .reduce((count, user: any) => 
           count + user.sessions.filter((s: any) => s.isActive).length, 0)
+    }
+  };
+}
+
+/**
+ * カスタム期間でのランキング計算（user_voice_activitiesベース）
+ * 任意期間対応・複数週にまたがる期間でも対応
+ */
+export async function calculateCustomRanking(
+  client: Client,
+  guildId: string,
+  metric: 'duration' | 'sessions' | 'started_sessions',
+  from: string,
+  to: string,
+  limit: number = 10,
+  compare: boolean = true,
+  discordClient?: DiscordClient
+) {
+  // カスタム期間の統計を計算
+  const currentStats = await calculateCustomPeriodStats(client, guildId, from, to);
+  
+  // 比較期間の計算（期間の長さに基づいて前期間を決定）
+  let previousStats: any = {};
+  let previousPeriod: { from: string; to: string } | null = null;
+  
+  if (compare) {
+    const daysDiff = Math.ceil((new Date(to).getTime() - new Date(from).getTime()) / (1000 * 60 * 60 * 24));
+    const fromDate = new Date(from);
+    const previousFrom = new Date(fromDate);
+    previousFrom.setDate(previousFrom.getDate() - daysDiff);
+    const previousTo = new Date(fromDate);
+    previousTo.setDate(previousTo.getDate() - 1);
+    
+    previousPeriod = {
+      from: previousFrom.toISOString().split('T')[0],
+      to: previousTo.toISOString().split('T')[0]
+    };
+    
+    const prevStats = await calculateCustomPeriodStats(client, guildId, previousPeriod.from, previousPeriod.to);
+    previousStats = prevStats.userStats.reduce((acc: any, user: any) => {
+      acc[user.userId] = user;
+      return acc;
+    }, {});
+  }
+  
+  // ランキング生成
+  const sortField = metric === 'duration' ? 'totalDuration' : 
+                   metric === 'sessions' ? 'sessionCount' : 
+                   'startedSessionCount';
+  
+  const sortedUsers = currentStats.userStats
+    .sort((a: any, b: any) => b[sortField] - a[sortField])
+    .slice(0, limit);
+
+  // アバター情報を一括取得
+  let avatars: { [userId: string]: string | null } = {};
+  if (discordClient) {
+    const userIds = sortedUsers.map((user: any) => user.userId);
+    avatars = await getUserAvatars(discordClient, userIds);
+  }
+
+  const rankings = sortedUsers.map((user: any, index: number) => {
+    const previous = previousStats[user.userId];
+    
+    let comparison = null;
+    if (compare && previous) {
+      const previousValue = previous[sortField] || 0;
+      const change = user[sortField] - previousValue;
+      const changePercentage = previousValue > 0 ? Math.round((change / previousValue) * 100) : null;
+      
+      comparison = {
+        previousValue,
+        change,
+        changePercentage,
+        rankChange: null, // カスタム期間では順位変動は複雑なため省略
+        isNew: false
+      };
+    } else if (compare && !previous) {
+      comparison = {
+        previousValue: 0,
+        change: user[sortField],
+        changePercentage: null,
+        rankChange: null,
+        isNew: true
+      };
+    }
+    
+    return {
+      rank: index + 1,
+      userId: user.userId,
+      username: user.username,
+      avatar: avatars[user.userId] || null,
+      value: user[sortField],
+      sessionCount: user.sessionCount,
+      longestSession: user.longestSession,
+      comparison: comparison || undefined
+    };
+  });
+  
+  return {
+    rankings,
+    period: {
+      from,
+      to,
+      previous: previousPeriod || undefined
+    },
+    totalParticipants: currentStats.userStats.length,
+    serverTotalDuration: currentStats.summary.totalDuration,
+    isCustomPeriod: true
+  };
+}
+
+/**
+ * カスタム期間での統計計算（内部関数）
+ */
+async function calculateCustomPeriodStats(client: Client, guildId: string, from: string, to: string) {
+  const activities = await client.execute({
+    sql: `
+      SELECT 
+        userId,
+        username,
+        duration,
+        isSessionStarter
+      FROM user_voice_activities 
+      WHERE guildId = ? 
+        AND joinTime >= ? 
+        AND leaveTime <= ?
+        AND duration IS NOT NULL
+      ORDER BY userId, joinTime
+    `,
+    args: [guildId, `${from}T00:00:00.000Z`, `${to}T23:59:59.999Z`]
+  });
+  
+  // ユーザー別統計集計
+  const userStats: { [userId: string]: any } = {};
+  let totalDuration = 0;
+  let totalSessions = 0;
+  let longestSession = 0;
+  
+  activities.rows.forEach((activity: any) => {
+    const { userId, username, duration, isSessionStarter } = activity;
+    
+    if (!userStats[userId]) {
+      userStats[userId] = {
+        userId,
+        username,
+        totalDuration: 0,
+        sessionCount: 0,
+        startedSessionCount: 0,
+        longestSession: 0
+      };
+    }
+    
+    userStats[userId].totalDuration += Number(duration);
+    userStats[userId].sessionCount += 1;
+    if (isSessionStarter) {
+      userStats[userId].startedSessionCount += 1;
+    }
+    userStats[userId].longestSession = Math.max(userStats[userId].longestSession, Number(duration));
+    
+    totalDuration += Number(duration);
+    totalSessions += 1;
+    longestSession = Math.max(longestSession, Number(duration));
+  });
+  
+  return {
+    userStats: Object.values(userStats),
+    summary: {
+      totalDuration,
+      totalSessions,
+      totalParticipants: Object.keys(userStats).length,
+      longestSession
     }
   };
 }

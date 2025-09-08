@@ -38,65 +38,27 @@ npm run preview      # 本番ビルドのプレビュー
 
 ## システム概要
 
-Discord通知ボット + Webダッシュボードのモノレポ構成。バックエンドとフロントエンドが分離されたアプリケーションです。
+Discord通知ボット + Webダッシュボードのモノレポ構成。
 
 ### 技術スタック
 - **バックエンド**: Fastify + Discord.js + Turso (libSQL)
-- **フロントエンド**: React + TypeScript + Tailwind CSS + Vite
+- **フロントエンド**: React + TypeScript + Jotai + Tailwind CSS
 - **認証**: Discord OAuth2 + JWT
 - **デプロイ**: Koyeb (Backend) + Vercel (Frontend)
-- **データベース**: Turso (分散SQLite)
 
-## アーキテクチャ構造
+### 現在の実装状況
+**📋 詳細は [docs/IMPLEMENTATION_STATUS.md](./docs/IMPLEMENTATION_STATUS.md) を参照**
 
-@docs/API_SPECIFICATION.md を参照してください
+- **Phase 1-2 (バックエンド)**: ✅ **完了** - API・統計・認証システム
+- **Phase 3 (フロントエンド)**: ✅ **95%完了** - 統計ダッシュボード動作中
+- **Phase 4 (通知システム)**: 🔄 **15%完了** - データベース準備完了
 
-### バックエンド構造 (Fastify API + Discord Bot)
-- **server.ts**: サーバーエントリーポイント（グレースフルシャットダウン対応）
-- **app.ts**: Fastifyアプリケーションセットアップ（依存関係順でプラグイン読み込み）
-- **plugins/**: Fastifyプラグイン（以下の順序で読み込み）:
-  1. `support` - ユーティリティ関数
-  2. `env` - 環境変数バリデーション
-  3. `database` - Turso SQLiteデータベース接続とヘルパー
-  4. `discord` - Discord.jsクライアントとボイス状態イベント処理
-  5. `auth` - JWTベース認証
-  6. `commands` - Discordスラッシュコマンド
-  7. `keepalive` - ヘルスチェックエンドポイント
-- **routes/**: APIエンドポイント（Fastifyによる自動読み込み）
-  - `api/auth/` - Discord OAuth認証
-  - `api/control/` - Bot制御エンドポイント
-  - `health/` - ヘルスチェックエンドポイント
+## アーキテクチャ詳細
 
-### フロントエンド構造 (React SPA)
-- **src/App.tsx**: テーマ切替機能付きメインアプリケーション（Normal/Neonモード）
-- **components/**: ダッシュボードタブを含むReactコンポーネント
-- **hooks/**: 認証(`useAuth`) とDiscordデータ(`useDiscordData`) 用カスタムフック
-- **types/discord.ts**: Discord APIデータ用TypeScriptインターフェース
-- **utils/**: APIクライアントとユーティリティ関数
-
-### データベース設計
-
-@docs/DATABASE_DESIGN.md を参照してください
-
-Turso (SQLite) を使用し、以下のテーブル構成：
-
-#### 既存テーブル
-- `notifications`: ボイスチャンネルとテキストチャンネルのマッピング
-- `voice_sessions`: ボイスチャンネル活動セッション追跡
-
-#### 統計・通知機能用テーブル（実装予定）
-- `user_voice_activities`: 個人の入退室詳細ログ
-- `period_user_stats`: 期間別集計統計（週/月/年）
-- `notification_schedules`: 通知スケジュール設定
-- `daily_activity_summaries`: 日次活動サマリー
-- `weekly_activity_summaries`: 週次活動サマリー
-- `monthly_activity_summaries`: 月次活動サマリー
-
-### Discord Bot機能
-- ボイスチャンネル参加/退出通知（リッチEmbed）
-- セッション追跡（通話開始/終了と継続時間）
-- 設定用スラッシュコマンド
-- マルチサーバー対応（サーバー別設定）
+**📖 詳細な設計情報:**
+- **[開発ガイド](./docs/DEVELOPMENT.md)** - セットアップ・技術詳細・トラブルシューティング
+- **[API設計仕様](./docs/API_SPECIFICATION.md)** - API仕様・エラーコード  
+- **[データベース設計](./docs/DATABASE_DESIGN.md)** - テーブル構造・統計システム
 
 ## 環境変数
 
@@ -143,21 +105,23 @@ VAPID_SUBJECT=mailto:your-email@example.com
 - バックエンドは依存関係の順序を保証するために手動プラグイン登録を使用（自動読み込みではない）
 - 各プラグインは前のプラグインに依存する可能性があるため、厳密な順序が必要
 
-### Discord Bot処理
+### Discord Bot処理（✅ 実装済み）
 - ボイス状態変更を監視し、リッチEmbedで通知を送信
-- セッション管理とユーザー活動追跡
-- 個人の入退室記録を `user_voice_activities` テーブルに記録
-- 期間別統計を `period_user_stats` テーブルでリアルタイム更新
+- セッション管理とユーザー活動追跡（完全動作）
+- 個人の入退室記録を `user_voice_activities` テーブルに記録（完全動作）
+- 期間別統計を `period_user_stats` テーブルでリアルタイム更新（完全動作）
+- 週次・月次・年次の統計自動計算システム（完全動作）
 
 ### 認証フロー
 1. `/api/auth/discord` でDiscord OAuth2開始
 2. `/api/auth/callback` でコールバック処理・JWT発行
 3. 以降のAPIは Bearer Token で認証
 
-### フロントエンド機能
-- デュアルテーマサポート（React Routerでテーマ切替）
-- 認証状態管理と自動トークンリフレッシュ
-- ダッシュボードでの統計表示とサーバー管理
+### フロントエンド機能（✅ 実装済み）
+- React Router SPA構成（適切なURL管理・ブラウザバック対応）
+- Jotai状態管理（atom分離・中央集権型・デバッグ対応）
+- 統計ダッシュボード（サマリー・ランキング・期間選択・完全動作）
+- 認証状態管理（自動トークンリフレッシュ・Discord OAuth2）
 
 ### データベース操作
 - ヘルパー関数による適切なトランザクション処理
@@ -174,25 +138,26 @@ VAPID_SUBJECT=mailto:your-email@example.com
 - Discord API エラーの適切な処理（レート制限、権限エラー等）
 - 統一されたAPIエラーレスポンス形式
 
-## 実装予定機能
+## 実装済み機能
 
-@docs/IMPLEMENTATION.md を参照してください
+### ✅ Discord Bot機能
+- ボイスチャンネル参加/退出通知（リッチEmbed）
+- セッション追跡（通話開始/終了と継続時間）
+- リアルタイム統計更新（user_voice_activities, period_user_stats）
+- 設定用スラッシュコマンド
+- マルチサーバー対応
 
-### 統計機能
-- ボイスチャンネル滞在時間ランキング
-- セッション開始者の追跡
-- 期間別比較機能（週間、月間）
-- タイムライン表示
+### ✅ 統計ダッシュボード (Web UI)
+- **認証**: Discord OAuth2 + JWT
+- **サマリー表示**: MVP・総計・参加者数・前期間比較
+- **ランキング表示**: 滞在時間・セッション数・開始セッション別
+- **期間選択**: プリセット期間（今週・先週・過去7日等）
+- **状態管理**: Jotai・React Router・リアルタイム更新
 
-### 通知システム
-- 日次/週次/月次の自動サマリー通知
-- Discord Embed形式での統計配信
-- カスタム通知時間設定
-- PWAプッシュ通知（将来）
-
-### その他
-- 参加アンケート機能（定期実行または手動）
-- 合成音声対応
+### 🔄 実装中・予定機能
+- **通知システム** (Phase 4): 自動統計配信・スケジュール管理
+- **タイムラインUI** (Phase 5): セッション履歴・参加時間帯可視化
+- **PWA対応** (Phase 5): プッシュ通知・オフライン対応
 
 ## デプロイ設定
 

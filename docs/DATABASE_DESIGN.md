@@ -47,7 +47,64 @@ CREATE INDEX idx_voice_sessions_active
 ON voice_sessions(guildId, channelId, isActive);
 ```
 
-### 3. 通知スケジュール関連テーブル（実装済み）
+### 2. 統計機能テーブル（✅ 完全実装・動作中）
+
+#### user_voice_activities テーブル（個人の入退室ログ）
+```sql
+CREATE TABLE user_voice_activities (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  guildId TEXT NOT NULL,
+  userId TEXT NOT NULL,
+  username TEXT NOT NULL,              -- Discord表示名（統計表示用）
+  channelId TEXT NOT NULL,
+  sessionId INTEGER NOT NULL,          -- voice_sessions.id への参照
+  joinTime DATETIME NOT NULL,          -- 入室時刻（ISO形式）
+  leaveTime DATETIME,                  -- 退室時刻（NULL = 接続中）
+  duration INTEGER,                    -- 滞在時間（秒）※leaveTime時に計算
+  isSessionStarter BOOLEAN DEFAULT false, -- 通話開始者フラグ
+  isActive BOOLEAN DEFAULT true,       -- アクティブ状態
+  createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  FOREIGN KEY (sessionId) REFERENCES voice_sessions(id)
+);
+
+-- 効率的な検索用インデックス（✅ 実装済み）
+CREATE INDEX idx_user_activities_ranking 
+ON user_voice_activities(guildId, userId, joinTime);
+
+CREATE INDEX idx_user_activities_session 
+ON user_voice_activities(sessionId, isActive);
+
+CREATE INDEX idx_user_activities_timeline 
+ON user_voice_activities(guildId, joinTime, leaveTime);
+```
+
+#### period_user_stats テーブル（期間別集計統計）
+```sql
+CREATE TABLE period_user_stats (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  guildId TEXT NOT NULL,
+  userId TEXT NOT NULL,
+  username TEXT NOT NULL,              -- 最新のDiscord表示名
+  periodType TEXT NOT NULL,            -- 'week', 'month', 'year'
+  periodKey TEXT NOT NULL,             -- '2025-W03', '2025-01', '2025'
+  totalDuration INTEGER DEFAULT 0,     -- 総滞在時間（秒）
+  sessionCount INTEGER DEFAULT 0,      -- 参加セッション数
+  startedSessionCount INTEGER DEFAULT 0, -- 開始したセッション数
+  longestSession INTEGER DEFAULT 0,    -- 最長セッション時間（秒）
+  averageSession INTEGER DEFAULT 0,    -- 平均セッション時間（秒）
+  lastActivityId INTEGER,              -- 最後に処理したactivity.id（増分更新用）
+  updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP,
+  
+  UNIQUE(guildId, userId, periodType, periodKey)
+);
+
+-- ランキング取得用インデックス（✅ 実装済み）
+CREATE INDEX idx_period_stats_ranking 
+ON period_user_stats(guildId, periodType, periodKey, totalDuration DESC);
+```
+
+### 3. 通知スケジュール関連テーブル（✅ 実装済み・API未実装）
 
 #### notification_schedules テーブル（通知設定管理）
 ```sql
@@ -511,11 +568,11 @@ async function getNotificationSchedule(guildId, scheduleType = 'daily') {
 }
 ```
 
-## データ記録のタイミングと処理
+## データ記録のタイミングと処理（✅ 完全実装・動作中）
 
 ### 1. リアルタイム記録（Discord イベント時）
 
-#### ユーザー入室時（実装済み）
+#### ユーザー入室時（✅ 実装済み・完全動作）
 ```javascript
 async function onUserJoinVoice(guildId, userId, channelId) {
   // 1. セッション管理（既存ロジック）
@@ -542,7 +599,7 @@ async function onUserJoinVoice(guildId, userId, channelId) {
 }
 ```
 
-#### ユーザー退室時（実装済み）
+#### ユーザー退室時（✅ 実装済み・完全動作）
 ```javascript
 async function onUserLeaveVoice(guildId, userId, channelId) {
   // 1. 個人記録終了（実装済み）
@@ -593,9 +650,9 @@ async function endUserActivity(guildId, userId, channelId) {
 }
 ```
 
-### 2. 期間別統計の更新（実装済み）
+### 2. 期間別統計の更新（✅ 実装済み・完全動作）
 
-#### リアルタイム統計更新（実装済み）
+#### リアルタイム統計更新（✅ 実装済み・完全動作）
 ```javascript
 // 実装済みの統計更新処理
 async function updatePeriodStatsForUser(guildId, userId, userName, userActivity) {
@@ -829,60 +886,15 @@ push_subscriptions: 最大100ユーザー = 100レコード (約20KB)
 
 **総データ量**: 年間約22MB（Turso無料枠内で十分対応可能）
 
-## 実装フェーズ（更新版）
+## 実装状況
 
-### ✅ Phase 1: 基本統計機能（完了）
-1. **✅ 完了**: データベーステーブル作成・マイグレーション
-   - `user_voice_activities`, `period_user_stats` テーブル実装済み
-   - インデックス作成・最適化済み
-2. **✅ 完了**: 個人入退室記録の実装
-   - Discord イベントハンドラー拡張済み
-   - リアルタイム統計更新機能実装済み
-3. **🔄 準備完了**: 週間ランキング表示・Web UI
-   - 統計ダッシュボード画面（APIエンドポイント準備完了）
-   - タイムライン表示機能（データ構造準備完了）
+**📋 詳細な実装状況・フェーズ管理は [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) を参照してください。**
 
-### ✅ Phase 2.1-2.4: API基盤・統計API（完了）
-1. **✅ 完了**: 統一APIレスポンス形式
-   - `{data, meta, error?}` 構造実装済み
-   - 構造化エラーハンドリング実装済み
-2. **✅ 完了**: 権限システム実装
-   - VIEW/MANAGE/EXECUTE 3段階権限実装済み
-   - Discord権限連携実装済み
-3. **✅ 完了**: 通知スケジュール管理テーブル
-   - `notification_schedules` テーブル実装済み
-   - 活動サマリーテーブル実装済み
-4. **✅ NEW 完了**: 統計API実装
-   - ランキングAPI (`GET /api/v1/guilds/{guildId}/statistics/rankings`)
-   - タイムラインAPI (`GET /api/v1/guilds/{guildId}/statistics/timeline`)
-   - サマリー履歴API (`GET /api/v1/guilds/{guildId}/statistics/summaries`)
-   - 統計計算ユーティリティ関数（period.ts, statistics.ts）
-   - バリデーション関数（validation.ts）
-
-### 🔄 Phase 3: 通知システム実装（次期）
-1. **準備完了**: 通知API実装
-   - スケジュール管理API
-   - テスト通知API
-   - 設定管理API
-2. **予定**: Discord通知機能
-   - 自動通知送信システム
-   - 通知フォーマット・Embed作成
-   - Web UI での通知設定画面
-
-### Phase 3: PWA・プッシュ通知
-1. **Week 12-13**: PWA基盤実装
-   - Service Worker 実装
-   - Web Push API 対応
-   - プッシュ通知購読管理
-2. **Week 14**: プッシュ通知機能
-   - サーバー側プッシュ送信機能
-   - 通知設定の個別管理
-
-### Phase 4: 最適化・拡張
-1. **Week 15-16**: パフォーマンス最適化
-   - Redis導入検討
-   - 通知配信の最適化
-   - 統計計算の高速化
+### データベース実装状況の概要
+- **統計テーブル**: ✅ **完全実装** (`user_voice_activities`, `period_user_stats`)
+- **通知テーブル**: ✅ **データベース準備完了** (`notification_schedules`, `*_activity_summaries`)
+- **インデックス・最適化**: ✅ **完了** (ランキング・タイムライン高速化対応)
+- **リアルタイム統計更新**: ✅ **完全動作** (Discord イベント → 即座に統計更新)
 
 ## 技術的考慮事項
 

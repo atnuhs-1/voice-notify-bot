@@ -34,46 +34,19 @@
   "charts": "recharts",
   "icons": "lucide-react",
   "routing": "React Router",
-  "state-management": "Custom Hooks (Jotai導入予定)"
+  "state-management": "Jotai (本格導入済み)"
 }
 ```
 
-## 現在の実装状況
+## 実装状況
 
-### ✅ 実装済み機能
-- Discord OAuth2 認証システム
-- JWT ベースのセッション管理
-- 基本的なDiscord Bot機能（voice_sessions管理）
-- サーバー管理者権限チェック
-- **✅ 統計ダッシュボードWeb UI**（React Router SPA・完全動作）
-- Discord Bot制御API（メッセージ送信、チャンネル操作など）
-- **統一APIレスポンス形式**（`{data, meta, error?}`構造）
-- **3段階権限システム**（VIEW/MANAGE/EXECUTE）
-- **基本統計データベーステーブル**（user_voice_activities, period_user_stats等）
-- **期間別統計計算の基盤**（週間・月間・年間統計）
-- **通知スケジュール管理テーブル**（notification_schedules等）
-- **構造化エラーハンドリング**（統一エラーコード・メッセージ）
-- **✅ 統計API実装完了**（ランキング・タイムライン・サマリー履歴）
-- **✅ Fastifyプラグインシステム**（response, permission, validation）
-- **✅ フロントエンド統計ダッシュボード完全実装**（実データ表示確認済み）
+**📋 詳細な実装状況は [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) を参照してください。**
 
-### 🔄 Phase 4: 次期実装予定
-
-#### 通知システム実装（Priority: High）
-- **通知API実装**: スケジュール管理・テスト通知・設定管理API
-- **Discord通知機能**: 自動通知送信システム・Cron スケジューラー
-- **通知フォーマット**: Discord Embed形式での統計配信
-- **Web UI**: 通知設定画面・テスト送信機能
-
-#### 状態管理ライブラリ導入（Priority: Medium）
-- **Jotai導入**: カスタムフック複雑化・Props drilling解消
-- **Atomic State Management**: 認証・サーバー管理・統計・期間選択の統一管理
-- **開発効率向上**: DevTools・デバッグ容易性・保守性向上
-
-#### Phase 5: PWA・拡張機能（Priority: Low）
-- **PWAプッシュ通知**: Service Worker・Web Push API対応
-- **パフォーマンス最適化**: Redis導入・統計計算高速化
-- **ユーザー詳細統計**: 個人ページ・トレンド表示
+### 概要
+- **Phase 1-2 (バックエンド基盤)**: ✅ **完了** (100%)
+- **Phase 3 (フロントエンド統計)**: ✅ **完了** (95% - タイムラインUI未実装)  
+- **Phase 4 (通知システム)**: 🔄 **実装中** (15% - データベース準備完了)
+- **Phase 5 (拡張・最適化)**: 📅 **未着手** (0%)
 
 ## API設計
 

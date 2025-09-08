@@ -8,26 +8,21 @@ import {
   retryAuthActionAtom,
   clearAuthErrorActionAtom,
   loginActionAtom,
-  authInitActionAtom
 } from './atoms/auth'
 import LoginScreen from './components/LoginScreen'
 import ErrorDisplay from './components/ErrorDisplay'
 import Layout from './components/layout/Layout'
+import AuthProvider from './components/AuthProvider'
 import DashboardPage from './pages/DashboardPage'
 import ChannelsPage from './pages/ChannelsPage'
 import MembersPage from './pages/MembersPage'
 import VoicePage from './pages/VoicePage'
 import MessagesPage from './pages/MessagesPage'
-import { useEffect } from 'react'
 import './App.css'
 
 // 認証保護付きのレイアウト（未認証なら /login へ）
 function ProtectedLayout({ isAuthenticated, isLoading }: { isAuthenticated: boolean; isLoading: boolean }) {
-  // 追加: 認証確認中はまだ判定を出さない（フラッシュ防止）
-  if (isLoading) {
-    return null // ここを <div /> やインラインスケルトンにしてもOK
-  }
-  if (!isAuthenticated) {
+  if (!isAuthenticated && !isLoading) {
     return <Navigate to="/login" replace />
   }
   return (
@@ -45,11 +40,6 @@ function AppContent() {
   const retryAuth = useSetAtom(retryAuthActionAtom)
   const clearError = useSetAtom(clearAuthErrorActionAtom)
   const login = useSetAtom(loginActionAtom)
-  const initAuth = useSetAtom(authInitActionAtom)
-
-  useEffect(() => {
-    initAuth()
-  }, [initAuth])
 
   if (error) {
     return (
@@ -71,9 +61,9 @@ function AppContent() {
         <Route
           path="/login"
           element={
-            isAuthenticated
+            (isAuthenticated || isLoading)
               ? <Navigate to="/" replace />
-              : (isLoading ? null : <LoginScreen />) // 認証判定中は空（フラッシュ防止）
+              : <LoginScreen />
           }
         />
         <Route element={<ProtectedLayout isAuthenticated={isAuthenticated} isLoading={isLoading} />}>
@@ -91,9 +81,13 @@ function AppContent() {
   )
 }
 
-// メインAppコンポーネント（Jotai版 - AuthProvider不要）
+// メインAppコンポーネント（AuthProvider統合版）
 function App() {
-  return <AppContent />
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  )
 }
 
 export default App

@@ -2,7 +2,8 @@ import type {
   APIResponse, 
   RankingQuery, 
   TimelineQuery, 
-  SummariesQuery 
+  SummariesQuery,
+  BackendPeriodPreset
 } from '../types/statistics';
 import { getDefaultStore } from 'jotai'
 import { authErrorAtom, authTokenAtom, authUserAtom, userGuildsAtom } from '../atoms/auth'
@@ -209,8 +210,9 @@ export const fetchRankings = async (
 ): Promise<APIResponse<any>> => {
   const params = new URLSearchParams();
   params.append('metric', query.metric);
-  params.append('from', query.from);
-  params.append('to', query.to);
+  if (query.from) params.append('from', query.from);
+  if (query.to) params.append('to', query.to);
+  if (query.period) params.append('period', query.period);
   if (query.limit) params.append('limit', query.limit.toString());
   if (query.compare !== undefined) params.append('compare', query.compare.toString());
 
@@ -329,4 +331,92 @@ export const checkStatisticsChanges = async (
   params.append('since', since);
   
   return apiCall(`/api/v1/guilds/${guildId}/statistics/changes?${params.toString()}`);
+};
+
+// === ハイブリッドAPI対応 ===
+
+// シンプルハイブリッドランキングAPI（バックエンドの優先順位に合わせて最適化）
+export const getRanking = async (params: {
+  guildId: string;
+  metric: 'duration' | 'sessions' | 'started_sessions';
+  
+  // プリセット期間（推奨・高速ルート）
+  period?: BackendPeriodPreset;
+  
+  // カスタム期間（フォールバック）
+  from?: string;
+  to?: string;
+  
+  limit?: number;
+  compare?: boolean;
+}): Promise<APIResponse<any>> => {
+  const queryParams = new URLSearchParams();
+  
+  queryParams.append('metric', params.metric);
+  
+  // バックエンドの優先順位に合わせる: period > from/to > デフォルトthis_week
+  if (params.period) {
+    queryParams.append('period', params.period); // 🚀 高速ルート
+    console.log(`🚀 Preset period: ${params.period}`);
+  } else if (params.from && params.to) {
+    queryParams.append('from', params.from);
+    queryParams.append('to', params.to);
+    console.log(`📅 Custom period: ${params.from} - ${params.to}`);
+  }
+  // パラメータなし = バックエンドがthis_weekで処理
+  
+  if (params.limit) queryParams.append('limit', params.limit.toString());
+  if (params.compare !== undefined) queryParams.append('compare', params.compare.toString());
+  
+  return apiCall(`/api/v1/guilds/${params.guildId}/statistics/rankings?${queryParams.toString()}`);
+};
+
+// プリセット期間マッピングヘルパー
+export const mapToBackendPreset = (key: string): BackendPeriodPreset | null => {
+  const mapping: Record<string, BackendPeriodPreset> = {
+    'this_week': 'this_week',
+    'last_week': 'last_week', 
+    'this_month': 'this_month',
+    'last_month': 'last_month',
+    'last_7_days': 'last_7_days',
+    'last_30_days': 'last_30_days',
+    'this_year': 'this_year',
+    'last_year': 'last_year'
+  };
+  
+  return mapping[key] || null;
+};
+
+// プリセット期間でランキングAPI呼び出し（推奨・高速ルート）
+export const getRankingByPreset = async (
+  guildId: string,
+  metric: 'duration' | 'sessions' | 'started_sessions',
+  period: BackendPeriodPreset,
+  options: { limit?: number; compare?: boolean } = {}
+): Promise<APIResponse<any>> => {
+  return getRanking({
+    guildId,
+    metric,
+    period, // 🚀 プリセット優先で高速化
+    limit: options.limit || 10,
+    compare: options.compare !== undefined ? options.compare : true
+  });
+};
+
+// カスタム期間でランキングAPI呼び出し（必要時のみ）
+export const getRankingByCustom = async (
+  guildId: string,
+  metric: 'duration' | 'sessions' | 'started_sessions',
+  from: string,
+  to: string,
+  options: { limit?: number; compare?: boolean } = {}
+): Promise<APIResponse<any>> => {
+  return getRanking({
+    guildId,
+    metric,
+    from,
+    to,
+    limit: options.limit || 10,
+    compare: options.compare !== undefined ? options.compare : true
+  });
 };

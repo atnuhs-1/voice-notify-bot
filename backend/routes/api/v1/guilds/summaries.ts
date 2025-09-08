@@ -125,14 +125,15 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           id: summary.id,
           period: {
             key: summary.periodKey,
-            start: getPeriodStart(type as any, summary.periodKey),
-            end: getPeriodEnd(type as any, summary.periodKey)
+            start: type === 'daily' ? summary.periodKey : getPeriodStart(type === 'weekly' ? 'week' : 'month', summary.periodKey),
+            end: type === 'daily' ? summary.periodKey : getPeriodEnd(type === 'weekly' ? 'week' : 'month', summary.periodKey)
           },
           metrics: {
             totalDuration: summary.totalDuration,
             totalParticipants: summary.totalParticipants,
             totalSessions: summary.totalSessions,
-            longestSession: summary.longestSession
+            longestSession: summary.longestSession,
+            averageDailyDuration: summary.averageDailyDuration
           },
           topUser: summary.topUserId ? {
             userId: summary.topUserId,
@@ -191,6 +192,8 @@ async function fetchSummaries(
   const dateColumn = type === 'daily' ? 'activityDate' : 
                      type === 'weekly' ? 'weekStart' : 'monthStart';
   
+  console.log(`🔍 fetchSummaries: tableName=${tableName}, dateColumn=${dateColumn}`);
+  
   let sql = `
     SELECT 
       id,
@@ -198,7 +201,8 @@ async function fetchSummaries(
       totalDuration,
       totalParticipants,
       totalSessions,
-      longestSession,
+      ${type === 'daily' ? 'longestSession' : 'NULL'} as longestSession,
+      ${type === 'daily' ? 'NULL' : 'averageDailyDuration'} as averageDailyDuration,
       topUserId,
       topUsername,
       topUserDuration,
@@ -221,12 +225,21 @@ async function fetchSummaries(
   sql += ` ORDER BY ${dateColumn} DESC LIMIT ? OFFSET ?`;
   args.push(limit, offset);
   
-  const result = await client.execute({
-    sql,
-    args
-  });
+  console.log(`🔍 Executing SQL: ${sql}`);
+  console.log(`🔍 Args: ${JSON.stringify(args)}`);
   
-  return result.rows;
+  try {
+    const result = await client.execute({
+      sql,
+      args
+    });
+    
+    console.log(`✅ Query successful: ${result.rows.length} rows returned`);
+    return result.rows;
+  } catch (error) {
+    console.error(`❌ Database query failed:`, error);
+    throw error;
+  }
 }
 
 /**

@@ -37,11 +37,18 @@ export enum PermissionLevel {
 
 // 統計API関連の型定義
 
-// ランキング取得API
+// ランキング取得API（ハイブリッド対応）
 export interface RankingQuery {
+  // メトリクス指定（必須）
   metric: 'duration' | 'sessions' | 'started_sessions';
-  from: string; // 'YYYY-MM-DD'
-  to: string;   // 'YYYY-MM-DD'
+  
+  // ハイブリッド期間指定（どちらかを指定）
+  period?: 'this_week' | 'last_week' | 'this_month' | 'last_month' | 
+           'last_7_days' | 'last_30_days' | 'this_year' | 'last_year';
+  from?: string; // 'YYYY-MM-DD'
+  to?: string;   // 'YYYY-MM-DD'
+  
+  // オプション設定
   limit?: number;
   compare?: boolean; // 前期間との比較
 }
@@ -82,6 +89,9 @@ export interface RankingResponseMeta extends APIResponseMeta {
   serverTotalDuration: number;
   metric: string;
   hasComparison: boolean;
+  searchType: 'preset' | 'custom'; // ハイブリッド検索タイプ
+  preset?: string; // プリセット期間名（preset時のみ）
+  isOptimized?: boolean; // 高速ルート使用フラグ
 }
 
 // タイムライン取得API
@@ -356,6 +366,7 @@ export const API_ERROR_CODES = {
   USER_NOT_FOUND: 'USER_NOT_FOUND',
   CHANNEL_NOT_FOUND: 'CHANNEL_NOT_FOUND',
   SCHEDULE_NOT_FOUND: 'SCHEDULE_NOT_FOUND',
+  SUMMARY_ALREADY_EXISTS: 'SUMMARY_ALREADY_EXISTS',
 
   // Discord関連
   DISCORD_API_ERROR: 'DISCORD_API_ERROR',
