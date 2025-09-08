@@ -3,6 +3,7 @@ import { atomFamily } from 'jotai/utils';
 import { selectedGuildIdAtom } from './discord';
 import { selectedPresetAtom, customPeriodAtom } from './presets';
 import { fetchSummaries } from '../utils/api';
+import { getCurrentWeekPeriod, getLastWeekPeriod, getCurrentMonthPeriod, getLastMonthPeriod, getISOWeekBounds } from '../utils/period';
 import type { 
   BackendPeriodPreset, 
   SummariesQuery, 
@@ -206,39 +207,64 @@ function calculatePeriodRange(
   
   switch (preset) {
     case 'this_week': {
-      const weekStart = getWeekStart(today, offset);
-      const weekEnd = getWeekEnd(weekStart);
-      return {
-        from: weekStart.toISOString().split('T')[0],
-        to: weekEnd.toISOString().split('T')[0]
-      };
+      const weekPeriod = getCurrentWeekPeriod();
+      if (offset !== 0) {
+        // offset対応が必要な場合はperiod.tsのgetRelativePeriodを使用
+        const startDate = new Date(weekPeriod.from);
+        startDate.setDate(startDate.getDate() + (offset * 7));
+        const { start, end } = getISOWeekBounds(startDate);
+        return {
+          from: start.toISOString().split('T')[0],
+          to: end.toISOString().split('T')[0]
+        };
+      }
+      return { from: weekPeriod.from, to: weekPeriod.to };
     }
     
     case 'last_week': {
-      const weekStart = getWeekStart(today, offset - 1); // 既に-1週なので更にoffset
-      const weekEnd = getWeekEnd(weekStart);
-      return {
-        from: weekStart.toISOString().split('T')[0],
-        to: weekEnd.toISOString().split('T')[0]
-      };
+      const weekPeriod = getLastWeekPeriod();
+      if (offset !== 0) {
+        const startDate = new Date(weekPeriod.from);
+        startDate.setDate(startDate.getDate() + (offset * 7));
+        const { start, end } = getISOWeekBounds(startDate);
+        return {
+          from: start.toISOString().split('T')[0],
+          to: end.toISOString().split('T')[0]
+        };
+      }
+      return { from: weekPeriod.from, to: weekPeriod.to };
     }
     
     case 'this_month': {
-      const monthStart = getMonthStart(today, offset);
-      const monthEnd = getMonthEnd(monthStart);
-      return {
-        from: monthStart.toISOString().split('T')[0],
-        to: monthEnd.toISOString().split('T')[0]
-      };
+      const monthPeriod = getCurrentMonthPeriod();
+      if (offset !== 0) {
+        const startDate = new Date(monthPeriod.from);
+        startDate.setMonth(startDate.getMonth() + offset);
+        startDate.setDate(1);
+        const monthEnd = new Date(startDate);
+        monthEnd.setMonth(monthEnd.getMonth() + 1, 0);
+        return {
+          from: startDate.toISOString().split('T')[0],
+          to: monthEnd.toISOString().split('T')[0]
+        };
+      }
+      return { from: monthPeriod.from, to: monthPeriod.to };
     }
     
     case 'last_month': {
-      const monthStart = getMonthStart(today, offset - 1);
-      const monthEnd = getMonthEnd(monthStart);
-      return {
-        from: monthStart.toISOString().split('T')[0],
-        to: monthEnd.toISOString().split('T')[0]
-      };
+      const monthPeriod = getLastMonthPeriod();
+      if (offset !== 0) {
+        const startDate = new Date(monthPeriod.from);
+        startDate.setMonth(startDate.getMonth() + offset);
+        startDate.setDate(1);
+        const monthEnd = new Date(startDate);
+        monthEnd.setMonth(monthEnd.getMonth() + 1, 0);
+        return {
+          from: startDate.toISOString().split('T')[0],
+          to: monthEnd.toISOString().split('T')[0]
+        };
+      }
+      return { from: monthPeriod.from, to: monthPeriod.to };
     }
     
     case 'last_7_days': {
@@ -298,34 +324,4 @@ function calculateSummaryComparison(current: SummaryItem, previous: SummaryItem)
         : null
     }
   };
-}
-
-// 日付計算ヘルパー関数
-function getWeekStart(date: Date, weekOffset: number = 0): Date {
-  const d = new Date(date);
-  d.setDate(d.getDate() + (weekOffset * 7));
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 月曜日始まり
-  d.setDate(diff);
-  return d;
-}
-
-function getWeekEnd(weekStart: Date): Date {
-  const d = new Date(weekStart);
-  d.setDate(d.getDate() + 6); // 日曜日
-  return d;
-}
-
-function getMonthStart(date: Date, monthOffset: number = 0): Date {
-  const d = new Date(date);
-  d.setMonth(d.getMonth() + monthOffset);
-  d.setDate(1);
-  return d;
-}
-
-function getMonthEnd(monthStart: Date): Date {
-  const d = new Date(monthStart);
-  d.setMonth(d.getMonth() + 1);
-  d.setDate(0); // 前月の最終日
-  return d;
 }

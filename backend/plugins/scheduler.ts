@@ -6,6 +6,16 @@ import * as cron from 'node-cron'
 import type { FastifyPluginAsync } from 'fastify'
 import { getPeriodStart, getPeriodEnd } from '../utils/period'
 
+declare module 'fastify' {
+  interface FastifyInstance {
+    generateSummary: {
+      daily: (guildId: string) => Promise<void>
+      weekly: (guildId: string, force?: boolean) => Promise<void>
+      monthly: (guildId: string, force?: boolean) => Promise<void>
+    }
+  }
+}
+
 const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
   let cronJobs: cron.ScheduledTask[] = []
 
@@ -445,6 +455,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
   const calculateMonthlySummary = async (guildId: string, monthKey: string) => {
     const { dbHelpers } = fastify
 
+    // 月の開始・終了日を計算
+    const monthStart = getPeriodStart('month', monthKey)
+    const monthEnd = getPeriodEnd('month', monthKey)
+
+    fastify.log.info(`🔍 月次サマリー生成開始: ${guildId}/${monthKey} (${monthStart} - ${monthEnd})`)
+
     const stats = await dbHelpers.query({
       sql: `
         SELECT 
@@ -458,6 +474,8 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       args: [guildId, monthKey]
     })
 
+    fastify.log.info(`🔍 period_user_stats クエリ結果:`, stats.rows[0])
+
     const topUser = await dbHelpers.query({
       sql: `
         SELECT userId, username, totalDuration 
@@ -468,10 +486,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       args: [guildId, monthKey]
     })
 
+    fastify.log.info(`🔍 MVP取得クエリ結果:`, topUser.rows[0])
+
     const summary = stats.rows[0] || {}
     const mvp = topUser.rows[0]
 
-    return {
+    const result = {
       totalDuration: summary.totalDuration || 0,
       totalParticipants: summary.totalParticipants || 0,
       totalSessions: summary.totalSessions || 0,
@@ -482,6 +502,17 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       topUsername: mvp?.username || null,
       topUserDuration: mvp?.totalDuration || 0
     }
+
+    // デバッグログ出力
+    fastify.log.info(`📊 月次サマリー生成結果 (${guildId}/${monthKey}):`)
+    fastify.log.info(`  期間: ${monthStart} - ${monthEnd}`)
+    fastify.log.info(`  総滞在時間: ${result.totalDuration}秒 (${Math.round(result.totalDuration / 3600 * 100) / 100}時間)`)
+    fastify.log.info(`  セッション数: ${result.totalSessions}`)
+    fastify.log.info(`  参加者数: ${result.totalParticipants}人`)
+    fastify.log.info(`  1日平均: ${result.averageDailyDuration}秒`)
+    fastify.log.info(`  MVP: ${result.topUsername} (${result.topUserDuration}秒)`)
+    
+    return result
   }
 
   // 個別サマリー生成チェック関数
@@ -527,7 +558,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       
       if (existing.rows.length > 0 && force) {
         // 既存データを更新
-        await dbHelpers.query({
+        const updateResult = await dbHelpers.query({
           sql: `UPDATE weekly_activity_summaries 
                 SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
                     averageDailyDuration = ?, topUserId = ?, topUsername = ?, 
@@ -539,7 +570,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
             summary.topUserDuration, guildId, weekKey
           ]
         })
-        fastify.log.info(`📊 週次サマリー強制更新: ${guildId}/${weekKey}`)
+        fastify.log.info(`📊 週次サマリー強制更新: ${guildId}/${weekKey} (更新行数: ${updateResult.rowsAffected})`)
       } else {
         // 新規作成
         await dbHelpers.createWeeklySummary(guildId, weekKey, {
@@ -553,24 +584,44 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
     }
   }
 
-  const generateMonthlySummaryIfNeeded = async (guildId: string) => {
+  const generateMonthlySummaryIfNeeded = async (guildId: string, force = false) => {
     const { dbHelpers } = fastify
     const periods = await dbHelpers.getCurrentPeriodKeys()
     const monthKey = periods.currentMonth
-
+    
     const existing = await dbHelpers.query({
       sql: 'SELECT * FROM monthly_activity_summaries WHERE guildId = ? AND monthKey = ?',
       args: [guildId, monthKey]
     })
 
-    if (existing.rows.length === 0) {
+    if (existing.rows.length === 0 || force) {
       const summary = await calculateMonthlySummary(guildId, monthKey)
-      await dbHelpers.createMonthlySummary(guildId, monthKey, {
-        ...summary,
-        isNotified: false
-      })
-
-      fastify.log.info(`📊 自動月次サマリー生成: ${guildId}/${monthKey}`)
+      
+      if (existing.rows.length > 0 && force) {
+        // 既存データを更新
+        const updateResult = await dbHelpers.query({
+          sql: `UPDATE monthly_activity_summaries 
+                SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
+                    averageDailyDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
+                    topUserId = ?, topUsername = ?, topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
+                WHERE guildId = ? AND monthKey = ?`,
+          args: [
+            summary.totalDuration, summary.totalParticipants, summary.totalSessions,
+            summary.averageDailyDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
+            summary.topUserId, summary.topUsername, summary.topUserDuration, guildId, monthKey
+          ]
+        })
+        fastify.log.info(`📊 月次サマリー強制更新: ${guildId}/${monthKey} (更新行数: ${updateResult.rowsAffected})`)
+      } else {
+        // 新規作成
+        await dbHelpers.createMonthlySummary(guildId, monthKey, {
+          ...summary,
+          isNotified: false
+        })
+        fastify.log.info(`📊 自動月次サマリー生成: ${guildId}/${monthKey}`)
+      }
+    } else {
+      fastify.log.info(`ℹ️ 月次サマリー既に存在: ${guildId}/${monthKey} (force=false)`)
     }
   }
 
@@ -638,7 +689,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('generateSummary', {
     daily: generateDailySummaryIfNeeded,
     weekly: (guildId: string, force = false) => generateWeeklySummaryIfNeeded(guildId, force),  
-    monthly: generateMonthlySummaryIfNeeded
+    monthly: (guildId: string, force = false) => generateMonthlySummaryIfNeeded(guildId, force)
   })
 }
 

@@ -37,7 +37,7 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
 
       // 手動サマリー生成を実行
       let result: any;
-      const generateSummary = (fastify as any).generateSummary;
+      const generateSummary = fastify.generateSummary;
 
       switch (type) {
         case 'daily':
@@ -111,7 +111,7 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
             }
           }
           
-          await generateSummary.monthly(guildId);
+          await generateSummary.monthly(guildId, force);
           result = { type: 'monthly', message: '月次サマリーを生成しました', monthKey: monthPeriods.currentMonth };
           break;
 
