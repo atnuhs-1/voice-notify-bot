@@ -128,6 +128,7 @@ export interface SummaryItem {
     isNotified: boolean;
     notifiedAt: string | null;
   };
+  createdAt: string;
 }
 
 export interface SummariesData {

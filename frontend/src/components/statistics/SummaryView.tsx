@@ -12,6 +12,7 @@ import {
   Activity,
   TrendingUp,
 } from 'lucide-react';
+import { formatDuration, formatDateTime } from '../../utils/datetime';
 
 const SummaryView: React.FC = () => {
   const selectedGuildId = useAtomValue(selectedGuildIdAtom);
@@ -123,6 +124,19 @@ const SummaryView: React.FC = () => {
         </Card>
       )}
 
+      {/* Summary Generation Info */}
+      {currentData.createdAt && (
+        <Card className="p-4 bg-blue-50 border-blue-200">
+          <div className="flex items-center gap-3">
+            <div>
+              <div className="text-xs text-blue-700 font-serif">
+                生成日時: <span className="font-medium">{formatDateTime(currentData.createdAt)}</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Debug Info (Development only) */}
       {process.env.NODE_ENV === 'development' && currentSummary?.meta && (
         <Card className="p-4 bg-muted">
@@ -131,6 +145,9 @@ const SummaryView: React.FC = () => {
             <div>検索タイプ: {currentSummary.meta.searchType}</div>
             <div>サマリータイプ: {currentSummary.meta.summaryType}</div>
             <div>キャッシュキー: {currentSummary.meta.cacheKey}</div>
+            {currentData.createdAt && (
+              <div>生成日時: {formatDateTime(currentData.createdAt)}</div>
+            )}
           </div>
         </Card>
       )}
@@ -164,21 +181,5 @@ const StatsCard: React.FC<StatsCardProps> = ({
     </Card>
   );
 };
-
-
-// Utility Functions
-function formatDuration(seconds: number): string {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  
-  if (hours > 0) {
-    return `${hours}時間${minutes}分`;
-  } else if (minutes > 0) {
-    return `${minutes}分`;
-  } else {
-    return `${seconds}秒`;
-  }
-}
-
 
 export default SummaryView;

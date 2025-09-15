@@ -143,7 +143,8 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           notifications: {
             isNotified: summary.isNotified,
             notifiedAt: summary.notifiedAt
-          }
+          },
+          createdAt: summary.createdAt
         }))
       };
 
