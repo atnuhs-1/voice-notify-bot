@@ -133,7 +133,7 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
             totalParticipants: summary.totalParticipants,
             totalSessions: summary.totalSessions,
             longestSession: summary.longestSession,
-            averageDailyDuration: summary.averageDailyDuration
+            averageSessionDuration: summary.averageSessionDuration
           },
           topUser: summary.topUserId ? {
             userId: summary.topUserId,
@@ -143,7 +143,8 @@ const summariesRoute: FastifyPluginAsync = async (fastify) => {
           notifications: {
             isNotified: summary.isNotified,
             notifiedAt: summary.notifiedAt
-          }
+          },
+          createdAt: summary.createdAt
         }))
       };
 
@@ -202,7 +203,7 @@ async function fetchSummaries(
       totalParticipants,
       totalSessions,
       ${type === 'daily' ? 'longestSession' : 'NULL'} as longestSession,
-      ${type === 'daily' ? 'NULL' : 'averageDailyDuration'} as averageDailyDuration,
+      ${type === 'daily' ? 'NULL' : 'averageSessionDuration'} as averageSessionDuration,
       topUserId,
       topUsername,
       topUserDuration,

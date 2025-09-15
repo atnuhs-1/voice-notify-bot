@@ -5,6 +5,7 @@ import fp from 'fastify-plugin'
 import * as cron from 'node-cron'
 import type { FastifyPluginAsync } from 'fastify'
 import { getPeriodStart, getPeriodEnd } from '../utils/period'
+import { DiscordNotificationSender } from '../utils/discord-notification'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -12,12 +13,19 @@ declare module 'fastify' {
       daily: (guildId: string) => Promise<void>
       weekly: (guildId: string, force?: boolean) => Promise<void>
       monthly: (guildId: string, force?: boolean) => Promise<void>
+      weeklyByKey: (guildId: string, weekKey: string, force?: boolean) => Promise<void>
+      monthlyByKey: (guildId: string, monthKey: string, force?: boolean) => Promise<void>
     }
+    discordNotifier: DiscordNotificationSender
   }
 }
 
 const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
   let cronJobs: cron.ScheduledTask[] = []
+  
+  // Discord通知送信システムの初期化
+  const discordNotifier = new DiscordNotificationSender(fastify.discord, fastify.log)
+  fastify.decorate('discordNotifier', discordNotifier)
 
   // サマリー生成・通知スケジューラーの開始
   const startScheduler = () => {
@@ -240,8 +248,34 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       notifiedAt: new Date().toISOString()
     })
 
-    // Discord通知送信（将来実装）
-    // await sendDailyNotificationToDiscord(schedule.targetChannelId, summary, periodStart, periodEnd)
+    // Discord通知送信
+    if (schedule.targetChannelId) {
+      try {
+        const notificationResult = await discordNotifier.sendDailyNotification(
+          schedule.guildId,
+          schedule.targetChannelId,
+          {
+            totalDuration: summary.totalDuration,
+            totalParticipants: summary.totalParticipants,
+            totalSessions: summary.totalSessions,
+            longestSession: summary.longestSession,
+            topUserId: summary.topUser?.userId || null,
+            topUsername: summary.topUser?.username || null,
+            topUserDuration: summary.topUser?.duration || 0
+          },
+          periodStart.toISOString(),
+          periodEnd.toISOString()
+        )
+        
+        if (notificationResult.success) {
+          fastify.log.info(`✅ 日次Discord通知送信成功: ${schedule.guildId} -> ${schedule.targetChannelId}`)
+        } else {
+          fastify.log.error(`❌ 日次Discord通知送信失敗: ${notificationResult.error}`)
+        }
+      } catch (notificationError) {
+        fastify.log.error(`❌ 日次Discord通知送信エラー:`, notificationError)
+      }
+    }
 
     fastify.log.info(`✅ 日次サマリー生成・通知完了: ${schedule.guildId}/${today}`)
   }
@@ -273,6 +307,26 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       notifiedAt: new Date().toISOString()
     })
 
+    // Discord通知送信
+    if (schedule.targetChannelId) {
+      try {
+        const notificationResult = await discordNotifier.sendWeeklyNotification(
+          schedule.guildId,
+          schedule.targetChannelId,
+          summary,
+          weekKey
+        )
+        
+        if (notificationResult.success) {
+          fastify.log.info(`✅ 週次Discord通知送信成功: ${schedule.guildId} -> ${schedule.targetChannelId}`)
+        } else {
+          fastify.log.error(`❌ 週次Discord通知送信失敗: ${notificationResult.error}`)
+        }
+      } catch (notificationError) {
+        fastify.log.error(`❌ 週次Discord通知送信エラー:`, notificationError)
+      }
+    }
+
     fastify.log.info(`✅ 週次サマリー生成・通知完了: ${schedule.guildId}/${weekKey}`)
   }
 
@@ -302,6 +356,26 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       isNotified: true,
       notifiedAt: new Date().toISOString()
     })
+
+    // Discord通知送信
+    if (schedule.targetChannelId) {
+      try {
+        const notificationResult = await discordNotifier.sendMonthlyNotification(
+          schedule.guildId,
+          schedule.targetChannelId,
+          summary,
+          monthKey
+        )
+        
+        if (notificationResult.success) {
+          fastify.log.info(`✅ 月次Discord通知送信成功: ${schedule.guildId} -> ${schedule.targetChannelId}`)
+        } else {
+          fastify.log.error(`❌ 月次Discord通知送信失敗: ${notificationResult.error}`)
+        }
+      } catch (notificationError) {
+        fastify.log.error(`❌ 月次Discord通知送信エラー:`, notificationError)
+      }
+    }
 
     fastify.log.info(`✅ 月次サマリー生成・通知完了: ${schedule.guildId}/${monthKey}`)
   }
@@ -376,20 +450,13 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
             END
           ), 0) as totalDuration,
           COUNT(id) as totalSessions,
-          COALESCE(MAX(
-            CASE 
-              WHEN endTime IS NOT NULL 
-              THEN (julianday(endTime) - julianday(startTime)) * 86400
-              ELSE 0 
-            END
-          ), 0) as longestSession,
           COALESCE(AVG(
             CASE 
               WHEN endTime IS NOT NULL 
               THEN (julianday(endTime) - julianday(startTime)) * 86400
               ELSE 0 
             END
-          ) / 7, 0) as averageDailyDuration
+          ), 0) as averageSessionDuration
         FROM voice_sessions 
         WHERE guildId = ? 
           AND startTime >= ? 
@@ -431,8 +498,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       totalDuration: Math.round(summary.totalDuration || 0),
       totalParticipants: participantsData.totalParticipants || 0,
       totalSessions: summary.totalSessions || 0,
-      longestSession: Math.round(summary.longestSession || 0),
-      averageDailyDuration: Math.round(summary.averageDailyDuration || 0),
+      averageSessionDuration: Math.round(summary.averageSessionDuration || 0),
       topUserId: mvp?.userId || null,
       topUsername: mvp?.username || null,
       topUserDuration: mvp?.totalDuration || 0
@@ -444,14 +510,13 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
     fastify.log.info(`  実セッション時間: ${result.totalDuration}秒 (${Math.round(result.totalDuration / 3600 * 100) / 100}時間)`)
     fastify.log.info(`  セッション数: ${result.totalSessions}`)
     fastify.log.info(`  参加者数: ${result.totalParticipants}人`)
-    fastify.log.info(`  最長セッション: ${result.longestSession}秒`)
-    fastify.log.info(`  1日平均: ${result.averageDailyDuration}秒`)
+    fastify.log.info(`  セッション平均: ${result.averageSessionDuration}秒`)
     fastify.log.info(`  MVP: ${result.topUsername} (${result.topUserDuration}秒)`)
     
     return result
   }
 
-  // 月次統計計算（period_user_statsから）
+  // 月次統計計算（実セッション時間ベース）
   const calculateMonthlySummary = async (guildId: string, monthKey: string) => {
     const { dbHelpers } = fastify
 
@@ -461,20 +526,47 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
 
     fastify.log.info(`🔍 月次サマリー生成開始: ${guildId}/${monthKey} (${monthStart} - ${monthEnd})`)
 
+    // 実セッション時間ベースの統計
     const stats = await dbHelpers.query({
       sql: `
         SELECT 
-          SUM(totalDuration) as totalDuration,
-          COUNT(DISTINCT userId) as totalParticipants,
-          SUM(sessionCount) as totalSessions,
-          AVG(totalDuration / 30) as averageDailyDuration
+          COALESCE(SUM(
+            CASE 
+              WHEN endTime IS NOT NULL 
+              THEN (julianday(endTime) - julianday(startTime)) * 86400
+              ELSE 0 
+            END
+          ), 0) as totalDuration,
+          COUNT(id) as totalSessions,
+          COALESCE(AVG(
+            CASE 
+              WHEN endTime IS NOT NULL 
+              THEN (julianday(endTime) - julianday(startTime)) * 86400
+              ELSE 0 
+            END
+          ), 0) as averageSessionDuration
+        FROM voice_sessions 
+        WHERE guildId = ? 
+          AND startTime >= ? 
+          AND startTime <= ?
+          AND endTime IS NOT NULL
+      `,
+      args: [guildId, monthStart, monthEnd + 'T23:59:59Z']
+    })
+
+    fastify.log.info(`🔍 voice_sessions クエリ結果:`, stats.rows[0])
+
+    // 参加者数は別途計算（ユニークユーザー数）
+    const participants = await dbHelpers.query({
+      sql: `
+        SELECT COUNT(DISTINCT userId) as totalParticipants
         FROM period_user_stats 
         WHERE guildId = ? AND periodType = 'month' AND periodKey = ?
       `,
       args: [guildId, monthKey]
     })
 
-    fastify.log.info(`🔍 period_user_stats クエリ結果:`, stats.rows[0])
+    fastify.log.info(`🔍 参加者数クエリ結果:`, participants.rows[0])
 
     const topUser = await dbHelpers.query({
       sql: `
@@ -489,13 +581,14 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
     fastify.log.info(`🔍 MVP取得クエリ結果:`, topUser.rows[0])
 
     const summary = stats.rows[0] || {}
+    const participantsData = participants.rows[0] || {}
     const mvp = topUser.rows[0]
 
     const result = {
-      totalDuration: summary.totalDuration || 0,
-      totalParticipants: summary.totalParticipants || 0,
+      totalDuration: Math.round(summary.totalDuration || 0),
+      totalParticipants: participantsData.totalParticipants || 0,
       totalSessions: summary.totalSessions || 0,
-      averageDailyDuration: Math.round(summary.averageDailyDuration || 0),
+      averageSessionDuration: Math.round(summary.averageSessionDuration || 0),
       mostActiveDayDate: null, // 将来実装：日別統計から計算
       mostActiveDayDuration: 0,
       topUserId: mvp?.userId || null,
@@ -506,10 +599,10 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
     // デバッグログ出力
     fastify.log.info(`📊 月次サマリー生成結果 (${guildId}/${monthKey}):`)
     fastify.log.info(`  期間: ${monthStart} - ${monthEnd}`)
-    fastify.log.info(`  総滞在時間: ${result.totalDuration}秒 (${Math.round(result.totalDuration / 3600 * 100) / 100}時間)`)
+    fastify.log.info(`  実セッション時間: ${result.totalDuration}秒 (${Math.round(result.totalDuration / 3600 * 100) / 100}時間)`)
     fastify.log.info(`  セッション数: ${result.totalSessions}`)
     fastify.log.info(`  参加者数: ${result.totalParticipants}人`)
-    fastify.log.info(`  1日平均: ${result.averageDailyDuration}秒`)
+    fastify.log.info(`  セッション平均: ${result.averageSessionDuration}秒`)
     fastify.log.info(`  MVP: ${result.topUsername} (${result.topUserDuration}秒)`)
     
     return result
@@ -561,12 +654,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
         const updateResult = await dbHelpers.query({
           sql: `UPDATE weekly_activity_summaries 
                 SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
-                    averageDailyDuration = ?, topUserId = ?, topUsername = ?, 
+                    averageSessionDuration = ?, topUserId = ?, topUsername = ?, 
                     topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
                 WHERE guildId = ? AND weekKey = ?`,
           args: [
             summary.totalDuration, summary.totalParticipants, summary.totalSessions,
-            summary.averageDailyDuration, summary.topUserId, summary.topUsername,
+            summary.averageSessionDuration, summary.topUserId, summary.topUsername,
             summary.topUserDuration, guildId, weekKey
           ]
         })
@@ -602,12 +695,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
         const updateResult = await dbHelpers.query({
           sql: `UPDATE monthly_activity_summaries 
                 SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
-                    averageDailyDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
+                    averageSessionDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
                     topUserId = ?, topUsername = ?, topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
                 WHERE guildId = ? AND monthKey = ?`,
           args: [
             summary.totalDuration, summary.totalParticipants, summary.totalSessions,
-            summary.averageDailyDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
+            summary.averageSessionDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
             summary.topUserId, summary.topUsername, summary.topUserDuration, guildId, monthKey
           ]
         })
@@ -673,6 +766,86 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
     }
   })
 
+  // 指定週キーでの週次サマリー生成
+  const generateWeeklySummaryByKey = async (guildId: string, weekKey: string, force = false) => {
+    const { dbHelpers } = fastify
+
+    const existing = await dbHelpers.query({
+      sql: 'SELECT * FROM weekly_activity_summaries WHERE guildId = ? AND weekKey = ?',
+      args: [guildId, weekKey]
+    })
+
+    if (existing.rows.length === 0 || force) {
+      const summary = await calculateWeeklySummary(guildId, weekKey)
+      
+      if (existing.rows.length > 0 && force) {
+        // 既存データを更新
+        const updateResult = await dbHelpers.query({
+          sql: `UPDATE weekly_activity_summaries 
+                SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
+                    averageSessionDuration = ?, topUserId = ?, topUsername = ?, 
+                    topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
+                WHERE guildId = ? AND weekKey = ?`,
+          args: [
+            summary.totalDuration, summary.totalParticipants, summary.totalSessions,
+            summary.averageSessionDuration, summary.topUserId, summary.topUsername,
+            summary.topUserDuration, guildId, weekKey
+          ]
+        })
+        fastify.log.info(`📊 週次サマリー強制更新: ${guildId}/${weekKey} (更新行数: ${updateResult.rowsAffected})`)
+      } else {
+        // 新規作成
+        await dbHelpers.createWeeklySummary(guildId, weekKey, {
+          ...summary,
+          isNotified: false
+        })
+        fastify.log.info(`📊 週次サマリー生成: ${guildId}/${weekKey}`)
+      }
+    } else {
+      fastify.log.info(`ℹ️ 週次サマリー既に存在: ${guildId}/${weekKey} (force=false)`)
+    }
+  }
+
+  // 指定月キーでの月次サマリー生成
+  const generateMonthlySummaryByKey = async (guildId: string, monthKey: string, force = false) => {
+    const { dbHelpers } = fastify
+    
+    const existing = await dbHelpers.query({
+      sql: 'SELECT * FROM monthly_activity_summaries WHERE guildId = ? AND monthKey = ?',
+      args: [guildId, monthKey]
+    })
+
+    if (existing.rows.length === 0 || force) {
+      const summary = await calculateMonthlySummary(guildId, monthKey)
+      
+      if (existing.rows.length > 0 && force) {
+        // 既存データを更新
+        const updateResult = await dbHelpers.query({
+          sql: `UPDATE monthly_activity_summaries 
+                SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
+                    averageSessionDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
+                    topUserId = ?, topUsername = ?, topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
+                WHERE guildId = ? AND monthKey = ?`,
+          args: [
+            summary.totalDuration, summary.totalParticipants, summary.totalSessions,
+            summary.averageSessionDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
+            summary.topUserId, summary.topUsername, summary.topUserDuration, guildId, monthKey
+          ]
+        })
+        fastify.log.info(`📊 月次サマリー強制更新: ${guildId}/${monthKey} (更新行数: ${updateResult.rowsAffected})`)
+      } else {
+        // 新規作成
+        await dbHelpers.createMonthlySummary(guildId, monthKey, {
+          ...summary,
+          isNotified: false
+        })
+        fastify.log.info(`📊 月次サマリー生成: ${guildId}/${monthKey}`)
+      }
+    } else {
+      fastify.log.info(`ℹ️ 月次サマリー既に存在: ${guildId}/${monthKey} (force=false)`)
+    }
+  }
+
   // アプリ終了時のクリーンアップ
   fastify.addHook('onClose', async () => {
     cronJobs.forEach(job => {
@@ -689,7 +862,9 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
   fastify.decorate('generateSummary', {
     daily: generateDailySummaryIfNeeded,
     weekly: (guildId: string, force = false) => generateWeeklySummaryIfNeeded(guildId, force),  
-    monthly: (guildId: string, force = false) => generateMonthlySummaryIfNeeded(guildId, force)
+    monthly: (guildId: string, force = false) => generateMonthlySummaryIfNeeded(guildId, force),
+    weeklyByKey: (guildId: string, weekKey: string, force = false) => generateWeeklySummaryByKey(guildId, weekKey, force),
+    monthlyByKey: (guildId: string, monthKey: string, force = false) => generateMonthlySummaryByKey(guildId, monthKey, force)
   })
 }
 
