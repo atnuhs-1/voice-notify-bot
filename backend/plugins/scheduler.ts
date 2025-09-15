@@ -5,6 +5,7 @@ import fp from 'fastify-plugin'
 import * as cron from 'node-cron'
 import type { FastifyPluginAsync } from 'fastify'
 import { getPeriodStart, getPeriodEnd } from '../utils/period'
+import { DiscordNotificationSender } from '../utils/discord-notification'
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -15,11 +16,16 @@ declare module 'fastify' {
       weeklyByKey: (guildId: string, weekKey: string, force?: boolean) => Promise<void>
       monthlyByKey: (guildId: string, monthKey: string, force?: boolean) => Promise<void>
     }
+    discordNotifier: DiscordNotificationSender
   }
 }
 
 const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
   let cronJobs: cron.ScheduledTask[] = []
+  
+  // Discord通知送信システムの初期化
+  const discordNotifier = new DiscordNotificationSender(fastify.discord, fastify.log)
+  fastify.decorate('discordNotifier', discordNotifier)
 
   // サマリー生成・通知スケジューラーの開始
   const startScheduler = () => {
@@ -242,8 +248,34 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       notifiedAt: new Date().toISOString()
     })
 
-    // Discord通知送信（将来実装）
-    // await sendDailyNotificationToDiscord(schedule.targetChannelId, summary, periodStart, periodEnd)
+    // Discord通知送信
+    if (schedule.targetChannelId) {
+      try {
+        const notificationResult = await discordNotifier.sendDailyNotification(
+          schedule.guildId,
+          schedule.targetChannelId,
+          {
+            totalDuration: summary.totalDuration,
+            totalParticipants: summary.totalParticipants,
+            totalSessions: summary.totalSessions,
+            longestSession: summary.longestSession,
+            topUserId: summary.topUser?.userId || null,
+            topUsername: summary.topUser?.username || null,
+            topUserDuration: summary.topUser?.duration || 0
+          },
+          periodStart.toISOString(),
+          periodEnd.toISOString()
+        )
+        
+        if (notificationResult.success) {
+          fastify.log.info(`✅ 日次Discord通知送信成功: ${schedule.guildId} -> ${schedule.targetChannelId}`)
+        } else {
+          fastify.log.error(`❌ 日次Discord通知送信失敗: ${notificationResult.error}`)
+        }
+      } catch (notificationError) {
+        fastify.log.error(`❌ 日次Discord通知送信エラー:`, notificationError)
+      }
+    }
 
     fastify.log.info(`✅ 日次サマリー生成・通知完了: ${schedule.guildId}/${today}`)
   }
@@ -275,6 +307,26 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       notifiedAt: new Date().toISOString()
     })
 
+    // Discord通知送信
+    if (schedule.targetChannelId) {
+      try {
+        const notificationResult = await discordNotifier.sendWeeklyNotification(
+          schedule.guildId,
+          schedule.targetChannelId,
+          summary,
+          weekKey
+        )
+        
+        if (notificationResult.success) {
+          fastify.log.info(`✅ 週次Discord通知送信成功: ${schedule.guildId} -> ${schedule.targetChannelId}`)
+        } else {
+          fastify.log.error(`❌ 週次Discord通知送信失敗: ${notificationResult.error}`)
+        }
+      } catch (notificationError) {
+        fastify.log.error(`❌ 週次Discord通知送信エラー:`, notificationError)
+      }
+    }
+
     fastify.log.info(`✅ 週次サマリー生成・通知完了: ${schedule.guildId}/${weekKey}`)
   }
 
@@ -304,6 +356,26 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       isNotified: true,
       notifiedAt: new Date().toISOString()
     })
+
+    // Discord通知送信
+    if (schedule.targetChannelId) {
+      try {
+        const notificationResult = await discordNotifier.sendMonthlyNotification(
+          schedule.guildId,
+          schedule.targetChannelId,
+          summary,
+          monthKey
+        )
+        
+        if (notificationResult.success) {
+          fastify.log.info(`✅ 月次Discord通知送信成功: ${schedule.guildId} -> ${schedule.targetChannelId}`)
+        } else {
+          fastify.log.error(`❌ 月次Discord通知送信失敗: ${notificationResult.error}`)
+        }
+      } catch (notificationError) {
+        fastify.log.error(`❌ 月次Discord通知送信エラー:`, notificationError)
+      }
+    }
 
     fastify.log.info(`✅ 月次サマリー生成・通知完了: ${schedule.guildId}/${monthKey}`)
   }
