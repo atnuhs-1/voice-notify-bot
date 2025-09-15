@@ -563,7 +563,7 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
       await client.execute({
         sql: `INSERT OR REPLACE INTO weekly_activity_summaries 
               (guildId, weekKey, weekStart, weekEnd, totalDuration, totalParticipants, totalSessions,
-               averageDailyDuration, topUserId, topUsername, topUserDuration, isNotified, notifiedAt, createdAt)
+               averageSessionDuration, topUserId, topUsername, topUserDuration, isNotified, notifiedAt, createdAt)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           guildId,
@@ -573,7 +573,7 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
           summary.totalDuration || 0,
           summary.totalParticipants || 0,
           summary.totalSessions || 0,
-          summary.averageDailyDuration || 0,
+          summary.averageSessionDuration || 0,
           summary.topUserId || null,
           summary.topUsername || null,
           summary.topUserDuration || 0,
@@ -592,7 +592,7 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
       await client.execute({
         sql: `INSERT OR REPLACE INTO monthly_activity_summaries 
               (guildId, monthKey, monthStart, monthEnd, totalDuration, totalParticipants, totalSessions,
-               averageDailyDuration, mostActiveDayDate, mostActiveDayDuration, topUserId, topUsername, 
+               averageSessionDuration, mostActiveDayDate, mostActiveDayDuration, topUserId, topUsername, 
                topUserDuration, isNotified, notifiedAt, createdAt)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
@@ -603,7 +603,7 @@ const databasePlugin: FastifyPluginAsync = async (fastify) => {
           summary.totalDuration || 0,
           summary.totalParticipants || 0,
           summary.totalSessions || 0,
-          summary.averageDailyDuration || 0,
+          summary.averageSessionDuration || 0,
           summary.mostActiveDayDate || null,
           summary.mostActiveDayDuration || 0,
           summary.topUserId || null,
@@ -866,7 +866,7 @@ async function initializeTables(client: Client, logger: any) {
         totalDuration INTEGER DEFAULT 0,
         totalParticipants INTEGER DEFAULT 0,
         totalSessions INTEGER DEFAULT 0,
-        averageDailyDuration INTEGER DEFAULT 0,
+        averageSessionDuration INTEGER DEFAULT 0,
         topUserId TEXT,
         topUsername TEXT,
         topUserDuration INTEGER DEFAULT 0,
@@ -886,7 +886,7 @@ async function initializeTables(client: Client, logger: any) {
         totalDuration INTEGER DEFAULT 0,
         totalParticipants INTEGER DEFAULT 0,
         totalSessions INTEGER DEFAULT 0,
-        averageDailyDuration INTEGER DEFAULT 0,
+        averageSessionDuration INTEGER DEFAULT 0,
         mostActiveDayDate DATE,
         mostActiveDayDuration INTEGER DEFAULT 0,
         topUserId TEXT,

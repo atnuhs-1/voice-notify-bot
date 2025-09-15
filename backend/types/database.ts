@@ -102,7 +102,7 @@ export interface WeeklyActivitySummary {
   totalDuration: number;
   totalParticipants: number;
   totalSessions: number;
-  averageDailyDuration: number;
+  averageSessionDuration: number;
   topUserId: string | null;
   topUsername: string | null;
   topUserDuration: number;
@@ -120,7 +120,7 @@ export interface MonthlyActivitySummary {
   totalDuration: number;
   totalParticipants: number;
   totalSessions: number;
-  averageDailyDuration: number;
+  averageSessionDuration: number;
   mostActiveDayDate: string | null;
   mostActiveDayDuration: number;
   topUserId: string | null;

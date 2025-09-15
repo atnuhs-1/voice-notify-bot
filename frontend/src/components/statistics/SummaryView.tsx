@@ -72,9 +72,9 @@ const SummaryView: React.FC = () => {
       colorClasses: "bg-cyan-50 text-cyan-700 border-cyan-200",
     },
     {
-      title: currentData.metrics.averageDailyDuration !== null ? "1日平均活動時間" : "最長セッション",
-      value: formatDuration(currentData.metrics.averageDailyDuration !== null 
-        ? currentData.metrics.averageDailyDuration 
+      title: currentData.metrics.averageSessionDuration !== null ? "セッション平均時間" : "最長セッション",
+      value: formatDuration(currentData.metrics.averageSessionDuration !== null 
+        ? currentData.metrics.averageSessionDuration 
         : currentData.metrics.longestSession || 0),
       icon: TrendingUp,
       trend: undefined,

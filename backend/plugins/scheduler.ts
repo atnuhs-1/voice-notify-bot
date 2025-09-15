@@ -384,7 +384,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
               THEN (julianday(endTime) - julianday(startTime)) * 86400
               ELSE 0 
             END
-          ) / 7, 0) as averageDailyDuration
+          ), 0) as averageSessionDuration
         FROM voice_sessions 
         WHERE guildId = ? 
           AND startTime >= ? 
@@ -426,7 +426,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       totalDuration: Math.round(summary.totalDuration || 0),
       totalParticipants: participantsData.totalParticipants || 0,
       totalSessions: summary.totalSessions || 0,
-      averageDailyDuration: Math.round(summary.averageDailyDuration || 0),
+      averageSessionDuration: Math.round(summary.averageSessionDuration || 0),
       topUserId: mvp?.userId || null,
       topUsername: mvp?.username || null,
       topUserDuration: mvp?.totalDuration || 0
@@ -438,7 +438,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
     fastify.log.info(`  実セッション時間: ${result.totalDuration}秒 (${Math.round(result.totalDuration / 3600 * 100) / 100}時間)`)
     fastify.log.info(`  セッション数: ${result.totalSessions}`)
     fastify.log.info(`  参加者数: ${result.totalParticipants}人`)
-    fastify.log.info(`  1日平均: ${result.averageDailyDuration}秒`)
+    fastify.log.info(`  セッション平均: ${result.averageSessionDuration}秒`)
     fastify.log.info(`  MVP: ${result.topUsername} (${result.topUserDuration}秒)`)
     
     return result
@@ -472,7 +472,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
               THEN (julianday(endTime) - julianday(startTime)) * 86400
               ELSE 0 
             END
-          ) / 30, 0) as averageDailyDuration
+          ), 0) as averageSessionDuration
         FROM voice_sessions 
         WHERE guildId = ? 
           AND startTime >= ? 
@@ -516,7 +516,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
       totalDuration: Math.round(summary.totalDuration || 0),
       totalParticipants: participantsData.totalParticipants || 0,
       totalSessions: summary.totalSessions || 0,
-      averageDailyDuration: Math.round(summary.averageDailyDuration || 0),
+      averageSessionDuration: Math.round(summary.averageSessionDuration || 0),
       mostActiveDayDate: null, // 将来実装：日別統計から計算
       mostActiveDayDuration: 0,
       topUserId: mvp?.userId || null,
@@ -530,7 +530,7 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
     fastify.log.info(`  実セッション時間: ${result.totalDuration}秒 (${Math.round(result.totalDuration / 3600 * 100) / 100}時間)`)
     fastify.log.info(`  セッション数: ${result.totalSessions}`)
     fastify.log.info(`  参加者数: ${result.totalParticipants}人`)
-    fastify.log.info(`  1日平均: ${result.averageDailyDuration}秒`)
+    fastify.log.info(`  セッション平均: ${result.averageSessionDuration}秒`)
     fastify.log.info(`  MVP: ${result.topUsername} (${result.topUserDuration}秒)`)
     
     return result
@@ -582,12 +582,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
         const updateResult = await dbHelpers.query({
           sql: `UPDATE weekly_activity_summaries 
                 SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
-                    averageDailyDuration = ?, topUserId = ?, topUsername = ?, 
+                    averageSessionDuration = ?, topUserId = ?, topUsername = ?, 
                     topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
                 WHERE guildId = ? AND weekKey = ?`,
           args: [
             summary.totalDuration, summary.totalParticipants, summary.totalSessions,
-            summary.averageDailyDuration, summary.topUserId, summary.topUsername,
+            summary.averageSessionDuration, summary.topUserId, summary.topUsername,
             summary.topUserDuration, guildId, weekKey
           ]
         })
@@ -623,12 +623,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
         const updateResult = await dbHelpers.query({
           sql: `UPDATE monthly_activity_summaries 
                 SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
-                    averageDailyDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
+                    averageSessionDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
                     topUserId = ?, topUsername = ?, topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
                 WHERE guildId = ? AND monthKey = ?`,
           args: [
             summary.totalDuration, summary.totalParticipants, summary.totalSessions,
-            summary.averageDailyDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
+            summary.averageSessionDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
             summary.topUserId, summary.topUsername, summary.topUserDuration, guildId, monthKey
           ]
         })
@@ -711,12 +711,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
         const updateResult = await dbHelpers.query({
           sql: `UPDATE weekly_activity_summaries 
                 SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
-                    averageDailyDuration = ?, topUserId = ?, topUsername = ?, 
+                    averageSessionDuration = ?, topUserId = ?, topUsername = ?, 
                     topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
                 WHERE guildId = ? AND weekKey = ?`,
           args: [
             summary.totalDuration, summary.totalParticipants, summary.totalSessions,
-            summary.averageDailyDuration, summary.topUserId, summary.topUsername,
+            summary.averageSessionDuration, summary.topUserId, summary.topUsername,
             summary.topUserDuration, guildId, weekKey
           ]
         })
@@ -751,12 +751,12 @@ const schedulerPlugin: FastifyPluginAsync = async (fastify) => {
         const updateResult = await dbHelpers.query({
           sql: `UPDATE monthly_activity_summaries 
                 SET totalDuration = ?, totalParticipants = ?, totalSessions = ?, 
-                    averageDailyDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
+                    averageSessionDuration = ?, mostActiveDayDate = ?, mostActiveDayDuration = ?,
                     topUserId = ?, topUsername = ?, topUserDuration = ?, createdAt = CURRENT_TIMESTAMP
                 WHERE guildId = ? AND monthKey = ?`,
           args: [
             summary.totalDuration, summary.totalParticipants, summary.totalSessions,
-            summary.averageDailyDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
+            summary.averageSessionDuration, summary.mostActiveDayDate, summary.mostActiveDayDuration,
             summary.topUserId, summary.topUsername, summary.topUserDuration, guildId, monthKey
           ]
         })

@@ -117,7 +117,7 @@ export interface SummaryItem {
     totalParticipants: number;
     totalSessions: number;
     longestSession: number | null;
-    averageDailyDuration: number | null;
+    averageSessionDuration: number | null;
   };
   topUser: {
     userId: string;
