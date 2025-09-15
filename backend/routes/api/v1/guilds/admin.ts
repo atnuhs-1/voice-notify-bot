@@ -4,6 +4,7 @@
 import { FastifyPluginAsync } from 'fastify';
 import type { APIResponse } from '../../../../types/api';
 import { PermissionLevel, API_ERROR_CODES } from '../../../../types/api';
+import { getPreviousPeriodKey } from '../../../../utils/period';
 
 const adminRoute: FastifyPluginAsync = async (fastify) => {
   
@@ -12,6 +13,7 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
     Params: { guildId: string };
     Body: {
       type: 'daily' | 'weekly' | 'monthly';
+      period?: 'current' | 'previous'; // current=今週/今月, previous=先週/先月
       force?: boolean; // 既存データを上書き
     };
   }>('/:guildId/admin/generate-summary', {
@@ -21,7 +23,7 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
     ]
   }, async (request, reply) => {
     const { guildId } = request.params;
-    const { type, force = false } = request.body;
+    const { type, period = 'current', force = false } = request.body;
     const requestId = fastify.generateRequestId();
 
     try {
@@ -65,19 +67,22 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
 
         case 'weekly':
           const periods = await fastify.dbHelpers.getCurrentPeriodKeys();
+          const weekKey = period === 'current' ? periods.currentWeek : getPreviousPeriodKey('week', periods.currentWeek);
+          const periodLabel = period === 'current' ? '今週' : '先週';
           
           if (!force) {
             const existing = await fastify.dbHelpers.query({
               sql: 'SELECT * FROM weekly_activity_summaries WHERE guildId = ? AND weekKey = ?',
-              args: [guildId, periods.currentWeek]
+              args: [guildId, weekKey]
             });
             if (existing.rows.length > 0) {
               return reply.code(400).send(fastify.createErrorResponse({
                 code: API_ERROR_CODES.SUMMARY_ALREADY_EXISTS,
-                message: '今週の週次サマリーは既に生成済みです',
+                message: `${periodLabel}の週次サマリーは既に生成済みです`,
                 details: { 
                   guildId, 
-                  weekKey: periods.currentWeek,
+                  weekKey,
+                  period,
                   summary: existing.rows[0],
                   hint: 'force=true で上書き可能です'
                 }
@@ -85,25 +90,28 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
             }
           }
           
-          await generateSummary.weekly(guildId, force);
-          result = { type: 'weekly', message: '週次サマリーを生成しました', weekKey: periods.currentWeek };
+          await generateSummary.weeklyByKey(guildId, weekKey, force);
+          result = { type: 'weekly', period, message: `${periodLabel}の週次サマリーを生成しました`, weekKey };
           break;
 
         case 'monthly':
           const monthPeriods = await fastify.dbHelpers.getCurrentPeriodKeys();
+          const monthKey = period === 'current' ? monthPeriods.currentMonth : getPreviousPeriodKey('month', monthPeriods.currentMonth);
+          const monthLabel = period === 'current' ? '今月' : '先月';
           
           if (!force) {
             const existing = await fastify.dbHelpers.query({
               sql: 'SELECT * FROM monthly_activity_summaries WHERE guildId = ? AND monthKey = ?',
-              args: [guildId, monthPeriods.currentMonth]
+              args: [guildId, monthKey]
             });
             if (existing.rows.length > 0) {
               return reply.code(400).send(fastify.createErrorResponse({
                 code: API_ERROR_CODES.SUMMARY_ALREADY_EXISTS,
-                message: '今月の月次サマリーは既に生成済みです',
+                message: `${monthLabel}の月次サマリーは既に生成済みです`,
                 details: { 
                   guildId, 
-                  monthKey: monthPeriods.currentMonth,
+                  monthKey,
+                  period,
                   summary: existing.rows[0],
                   hint: 'force=true で上書き可能です'
                 }
@@ -111,8 +119,8 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
             }
           }
           
-          await generateSummary.monthly(guildId, force);
-          result = { type: 'monthly', message: '月次サマリーを生成しました', monthKey: monthPeriods.currentMonth };
+          await generateSummary.monthlyByKey(guildId, monthKey, force);
+          result = { type: 'monthly', period, message: `${monthLabel}の月次サマリーを生成しました`, monthKey };
           break;
 
         default:
@@ -134,6 +142,7 @@ const adminRoute: FastifyPluginAsync = async (fastify) => {
           requestId,
           operation: 'manual-summary-generation',
           guildId,
+          period,
           force
         }
       };
