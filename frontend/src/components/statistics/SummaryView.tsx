@@ -32,7 +32,11 @@ const SummaryView: React.FC = () => {
 
   const currentData = currentSummary?.data?.summaries?.[0];
 
-  if (!currentData) {
+  // データが存在しない場合またはメトリクスが全て0の場合
+  const hasNoData = !currentData || 
+    (currentData.metrics.totalDuration === 0 && currentData.metrics.totalSessions === 0);
+
+  if (hasNoData) {
     return (
       <div className="text-center py-12">
         <div className="text-6xl mb-4">📊</div>
