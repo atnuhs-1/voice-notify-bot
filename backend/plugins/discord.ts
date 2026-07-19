@@ -124,15 +124,15 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
 
     const channelName = channel.name;
     // Botは通話の開始・終了判定に含めず、人間ユーザーだけを数える
-    const memberCount = channel.members.filter(member => !member.user.bot).size;
+    const humanMemberCount = channel.members.filter(member => !member.user.bot).size;
 
-    fastify.log.info(`👤 ${userName} joined voice channel: ${channelName} (${memberCount} members)`);
+    fastify.log.info(`👤 ${userName} joined voice channel: ${channelName} (${humanMemberCount} human members)`);
 
     // セッション管理: 通話開始 or 継続の判定
     let sessionId: number;
     let isSessionStarter = false;
 
-    if (memberCount === 1) {
+    if (humanMemberCount === 1) {
       // 通話開始
       sessionId = await dbHelpers.startVoiceSession(guildId, channelId);
       isSessionStarter = true;
