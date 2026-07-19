@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { Client, GatewayIntentBits, Events, VoiceState, EmbedBuilder, TextChannel } from 'discord.js';
+import { Client, GatewayIntentBits, Events, VoiceState, EmbedBuilder, TextChannel, ChannelType } from 'discord.js';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { getCurrentPeriodKeys } from '../utils/period';
 import { DatabaseHelpers } from './database';
@@ -116,22 +116,23 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
   try {
     // チャンネル情報を取得
     const channel = await discord.channels.fetch(channelId);
-    if (!channel || channel.type !== 2) return; // ボイスチャンネル以外は無視
+    if (!channel || channel.type !== ChannelType.GuildVoice) return; // 通常のボイスチャンネル以外は無視
 
     // ユーザー情報を取得
     const user = await discord.users.fetch(userId);
-    const userAvatar = user.avatar;
+    const userAvatarUrl = user.displayAvatarURL({ size: 128 });
 
     const channelName = channel.name;
-    const memberCount = channel.members.size;
+    // Botは通話の開始・終了判定に含めず、人間ユーザーだけを数える
+    const humanMemberCount = channel.members.filter(member => !member.user.bot).size;
 
-    fastify.log.info(`👤 ${userName} joined voice channel: ${channelName} (${memberCount} members)`);
+    fastify.log.info(`👤 ${userName} joined voice channel: ${channelName} (${humanMemberCount} human members)`);
 
     // セッション管理: 通話開始 or 継続の判定
     let sessionId: number;
     let isSessionStarter = false;
 
-    if (memberCount === 1) {
+    if (humanMemberCount === 1) {
       // 通話開始
       sessionId = await dbHelpers.startVoiceSession(guildId, channelId);
       isSessionStarter = true;
@@ -141,7 +142,7 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
         channelName,
         userName,
         userId,
-        userAvatar,
+        userAvatarUrl,
       });
     } else {
       // 既存セッションに参加
@@ -157,7 +158,7 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
         channelName,
         userName,
         userId,
-        userAvatar,
+        userAvatarUrl,
       });
     }
 
@@ -191,12 +192,13 @@ async function handleUserLeft(fastify: FastifyInstance, guildId: string, channel
   try {
     // チャンネル情報を取得
     const channel = await discord.channels.fetch(channelId);
-    if (!channel || channel.type !== 2) return;
+    if (!channel || channel.type !== ChannelType.GuildVoice) return;
 
     const channelName = channel.name;
-    const memberCount = channel.members.size;
+    // Botだけが残っている場合も通話終了として扱う
+    const memberCount = channel.members.filter(member => !member.user.bot).size;
 
-    fastify.log.info(`👤 ${userName} left voice channel: ${channelName} (${memberCount} members remaining)`);
+    fastify.log.info(`👤 ${userName} left voice channel: ${channelName} (${memberCount} human members remaining)`);
 
     // 新機能: 個人の退室記録を終了し、期間別統計を更新
     try {
@@ -299,7 +301,7 @@ function createNotificationEmbed(type: string, data: any): EmbedBuilder {
           { name: '`始めた人`', value: data.userName, inline: true },
           { name: '`開始時刻`', value: timeStr, inline: true }
         )
-        .setThumbnail(`https://cdn.discordapp.com/avatars/${data.userId}/${data.userAvatar}.png`)
+        .setThumbnail(data.userAvatarUrl)
         // .setTimestamp()
 
     case 'member_join':
@@ -311,7 +313,7 @@ function createNotificationEmbed(type: string, data: any): EmbedBuilder {
           { name: '`参加した人`', value: data.userName, inline: true },
           { name: '`参戦時間`', value: timeStr, inline: true }
         )
-        .setThumbnail(`https://cdn.discordapp.com/avatars/${data.userId}/${data.userAvatar}.png`)
+        .setThumbnail(data.userAvatarUrl)
         // .setTimestamp();
 
     case 'call_end':
