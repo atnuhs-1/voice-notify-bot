@@ -1,5 +1,5 @@
 import fp from 'fastify-plugin';
-import { Client, GatewayIntentBits, Events, VoiceState, EmbedBuilder, TextChannel } from 'discord.js';
+import { Client, GatewayIntentBits, Events, VoiceState, EmbedBuilder, TextChannel, ChannelType } from 'discord.js';
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { getCurrentPeriodKeys } from '../utils/period';
 import { DatabaseHelpers } from './database';
@@ -116,11 +116,11 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
   try {
     // チャンネル情報を取得
     const channel = await discord.channels.fetch(channelId);
-    if (!channel || channel.type !== 2) return; // ボイスチャンネル以外は無視
+    if (!channel || channel.type !== ChannelType.GuildVoice) return; // 通常のボイスチャンネル以外は無視
 
     // ユーザー情報を取得
     const user = await discord.users.fetch(userId);
-    const userAvatar = user.avatar;
+    const userAvatarUrl = user.displayAvatarURL({ size: 128 });
 
     const channelName = channel.name;
     // Botは通話の開始・終了判定に含めず、人間ユーザーだけを数える
@@ -142,7 +142,7 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
         channelName,
         userName,
         userId,
-        userAvatar,
+        userAvatarUrl,
       });
     } else {
       // 既存セッションに参加
@@ -158,7 +158,7 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
         channelName,
         userName,
         userId,
-        userAvatar,
+        userAvatarUrl,
       });
     }
 
@@ -192,7 +192,7 @@ async function handleUserLeft(fastify: FastifyInstance, guildId: string, channel
   try {
     // チャンネル情報を取得
     const channel = await discord.channels.fetch(channelId);
-    if (!channel || channel.type !== 2) return;
+    if (!channel || channel.type !== ChannelType.GuildVoice) return;
 
     const channelName = channel.name;
     // Botだけが残っている場合も通話終了として扱う
@@ -301,7 +301,7 @@ function createNotificationEmbed(type: string, data: any): EmbedBuilder {
           { name: '`始めた人`', value: data.userName, inline: true },
           { name: '`開始時刻`', value: timeStr, inline: true }
         )
-        .setThumbnail(`https://cdn.discordapp.com/avatars/${data.userId}/${data.userAvatar}.png`)
+        .setThumbnail(data.userAvatarUrl)
         // .setTimestamp()
 
     case 'member_join':
@@ -313,7 +313,7 @@ function createNotificationEmbed(type: string, data: any): EmbedBuilder {
           { name: '`参加した人`', value: data.userName, inline: true },
           { name: '`参戦時間`', value: timeStr, inline: true }
         )
-        .setThumbnail(`https://cdn.discordapp.com/avatars/${data.userId}/${data.userAvatar}.png`)
+        .setThumbnail(data.userAvatarUrl)
         // .setTimestamp();
 
     case 'call_end':
