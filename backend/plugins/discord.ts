@@ -198,7 +198,7 @@ async function handleUserLeft(fastify: FastifyInstance, guildId: string, channel
     // Botだけが残っている場合も通話終了として扱う
     const memberCount = channel.members.filter(member => !member.user.bot).size;
 
-    fastify.log.info(`👤 ${userName} left voice channel: ${channelName} (${memberCount} members remaining)`);
+    fastify.log.info(`👤 ${userName} left voice channel: ${channelName} (${memberCount} human members remaining)`);
 
     // 新機能: 個人の退室記録を終了し、期間別統計を更新
     try {
