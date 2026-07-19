@@ -123,7 +123,8 @@ async function handleUserJoined(fastify: FastifyInstance, guildId: string, chann
     const userAvatar = user.avatar;
 
     const channelName = channel.name;
-    const memberCount = channel.members.size;
+    // Botは通話の開始・終了判定に含めず、人間ユーザーだけを数える
+    const memberCount = channel.members.filter(member => !member.user.bot).size;
 
     fastify.log.info(`👤 ${userName} joined voice channel: ${channelName} (${memberCount} members)`);
 
@@ -194,7 +195,8 @@ async function handleUserLeft(fastify: FastifyInstance, guildId: string, channel
     if (!channel || channel.type !== 2) return;
 
     const channelName = channel.name;
-    const memberCount = channel.members.size;
+    // Botだけが残っている場合も通話終了として扱う
+    const memberCount = channel.members.filter(member => !member.user.bot).size;
 
     fastify.log.info(`👤 ${userName} left voice channel: ${channelName} (${memberCount} members remaining)`);
 
